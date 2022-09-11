@@ -11,15 +11,15 @@ deck.extend([20, 30])
 def get_parser():
     parser = argparse.ArgumentParser(description='DouZero: random data generator')
     parser.add_argument('--output', default='eval_data', type=str)
-    parser.add_argument('--num_games', default=10000, type=int)
+    parser.add_argument('--num_games', default=100, type=int)
     return parser
     
 def generate():
     _deck = deck.copy()
     np.random.shuffle(_deck)
-    card_play_data = {'landlord': _deck[:20],
-                      'landlord_up': _deck[20:37],
-                      'landlord_down': _deck[37:54],
+    card_play_data = {'first': _deck[:17],
+                      'second': _deck[20:37],
+                      'third': _deck[37:],
                       'three_landlord_cards': _deck[17:20],
                       }
     for key in card_play_data:

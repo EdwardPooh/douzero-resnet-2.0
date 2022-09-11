@@ -166,9 +166,13 @@ class GameEnv(object):
             self.card_play_init()
 
     def bid_step(self):
-        action = self.players[self.bidding_player_position].act(
-            self.bid_infoset)
-
+        if not isinstance(self.players[self.bidding_player_position], dict):
+            action = self.players[self.bidding_player_position].act(self.bid_infoset)
+        else:
+            action = self.players[self.bidding_player_position][self.bidding_player_position].act(self.bid_infoset)
+        action_list = None
+        if len(action) == 2:
+            action, action_list = action
         self.bid_info[self.bid_step_count] = int(action[0])
 
         self.bid_step_count += 1
@@ -211,7 +215,7 @@ class GameEnv(object):
             # print(self.position)
             # print(self.bid_count)
             self.bid_infoset = self.get_bid_infoset()
-        return action
+        return action, action_list
 
     def get_bidding_player_position(self):
         if self.bidding_player_position is None:
@@ -373,9 +377,8 @@ class GameEnv(object):
 
     def step(self):
         if self.bid_over and not self.draw:
-            action = self.players[self.acting_player_position].act(
-                self.game_infoset)
-            # print(action)
+            action = self.players[self.acting_player_position].act(self.game_infoset)
+            action_list = None
             self.step_count += 1
             if len(action) > 0:
                 self.last_pid = self.acting_player_position
@@ -407,7 +410,7 @@ class GameEnv(object):
             if not self.game_over:
                 self.get_acting_player_position()
                 self.game_infoset = self.get_infoset()
-            return action
+            return action, action_list
         elif not self.bid_over:
             return self.bid_step()
 
