@@ -160,9 +160,24 @@ class GameEnv(object):
                             self.position[0] = 'landlord_down'
                         break
         if self.bid_over:
+            # self.bid_info_sets['first'].play_card_position = self.position[0]
+            # self.bid_info_sets['second'].play_card_position = self.position[1]
+            # self.bid_info_sets['third'].play_card_position = self.position[2]
             self.bid_info_sets['first'].play_card_position = self.position[0]
             self.bid_info_sets['second'].play_card_position = self.position[1]
             self.bid_info_sets['third'].play_card_position = self.position[2]
+            if self.bid_info_sets["first"].play_card_position == "landlord":
+                self.bid_info_sets["first"].player_hand_cards += \
+                    self.bid_info_sets["first"].three_landlord_cards
+                self.bid_info_sets["first"].player_hand_cards.sort()
+            elif self.bid_info_sets["second"].play_card_position == "landlord":
+                self.bid_info_sets['second'].player_hand_cards += \
+                    self.bid_info_sets['second'].three_landlord_cards
+                self.bid_info_sets['second'].player_hand_cards.sort()
+            else:
+                self.bid_info_sets['third'].player_hand_cards += \
+                    self.bid_info_sets['third'].three_landlord_cards
+                self.bid_info_sets['third'].player_hand_cards.sort()
             self.card_play_init()
 
     def bid_step(self):
@@ -195,25 +210,6 @@ class GameEnv(object):
             # print(self.bid_count)
         # 叫牌正常结束
         else:
-            # # 分发位置
-            # self.bid_info_sets['first'].play_card_position = self.position[0]
-            # self.bid_info_sets['second'].play_card_position = self.position[1]
-            # self.bid_info_sets['third'].play_card_position = self.position[2]
-            # 地主牌加入手中
-            if self.bid_info_sets["first"].play_card_position == "landlord":
-                self.bid_info_sets["first"].player_hand_cards += \
-                    self.bid_info_sets["first"].three_landlord_cards
-                self.bid_info_sets["first"].player_hand_cards.sort()
-            elif self.bid_info_sets["second"].play_card_position == "landlord":
-                self.bid_info_sets['second'].player_hand_cards += \
-                    self.bid_info_sets['second'].three_landlord_cards
-                self.bid_info_sets['second'].player_hand_cards.sort()
-            else:
-                self.bid_info_sets['second'].player_hand_cards += \
-                    self.bid_info_sets['second'].three_landlord_cards
-                self.bid_info_sets['second'].player_hand_cards.sort()
-            # print(self.position)
-            # print(self.bid_count)
             self.bid_infoset = self.get_bid_infoset()
         return action, action_list
 
@@ -266,7 +262,10 @@ class GameEnv(object):
             self.bid_info_sets['second'].player_hand_cards
         self.info_sets[self.bid_info_sets['third'].play_card_position].player_hand_cards = \
             self.bid_info_sets['third'].player_hand_cards
+
         self.three_landlord_cards = self.bid_info_sets["first"].three_landlord_cards
+        if len(self.info_sets["landlord"].player_hand_cards) != 20:
+            print("error")
         self.bid_info = self.bid_info_sets["first"].bid_info
         for pos in ["landlord", "landlord_down", "landlord_up"]:
             self.info_sets[pos].bid_over = self.bid_over
@@ -277,9 +276,12 @@ class GameEnv(object):
         self.players = {'first': agent[0],
                         'second': agent[1],
                         'third': agent[2],
-                        self.position[0]: agent[3],
-                        self.position[1]: agent[4],
-                        self.position[2]: agent[5]
+                        # self.position[0]: agent[3],
+                        # self.position[1]: agent[4],
+                        # self.position[2]: agent[5]
+                        'landlord': agent[3],
+                        'landlord_down': agent[4],
+                        'landlord_up': agent[5],
                         }
         self.get_acting_player_position()
         self.game_infoset = self.get_infoset()

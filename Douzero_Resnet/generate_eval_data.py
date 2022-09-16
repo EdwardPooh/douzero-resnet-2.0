@@ -11,7 +11,7 @@ deck.extend([20, 30])
 def get_parser():
     parser = argparse.ArgumentParser(description='DouZero: random data generator')
     parser.add_argument('--output', default='eval_data', type=str)
-    parser.add_argument('--num_games', default=100, type=int)
+    parser.add_argument('--num_games', default=1000, type=int)
     return parser
     
 def generate():

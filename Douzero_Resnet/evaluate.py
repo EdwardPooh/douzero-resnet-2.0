@@ -11,7 +11,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--player_3_bid', type=str, default='random')
 
-    parser.add_argument('--player_1_playcard', type=str, default='random')
+    parser.add_argument('--player_1_playcard', type=str,
+                        default='douzero_checkpoints/douzero/general_landlord_3840800.ckpt')
 
     parser.add_argument('--player_2_playcard', type=str, default='random')
 

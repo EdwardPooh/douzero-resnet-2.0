@@ -88,7 +88,7 @@ def mp_simulate(card_play_data_list, card_play_model_path_dict, q):
     players = load_card_play_models(card_play_model_path_dict)
 
     Env = GameEnv(players)
-    enable_output = True
+    enable_output = False
     bid_count = [0, 0, 0, 0]
 
     if enable_output:
@@ -239,7 +239,7 @@ def evaluate(first, second, third, playcard_1, playcard_2, playcard_3, eval_data
     print('ADP results:')
     print('First : Second : Third - {} : {} : {}'.format(num_first_scores / num_total_wins,
                                                          num_second_scores / num_total_wins,
-                                                         num_third_wins / num_total_wins))
+                                                         num_third_scores / num_total_wins))
     print('landlord : Farmers - {} : {}'.format(num_landlord_scores / num_total_wins,
                                                 num_farmer_scores / num_total_wins))
     print('number of draw: - {}'.format(num_draw))
