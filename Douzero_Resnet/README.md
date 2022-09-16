@@ -1,4 +1,4 @@
-# Douzero_Resnet
+# Douzero_Resnet_2.0
 Douzero with ResNet and GPU support for Windows
 
 Fixed bugs， bigger network
