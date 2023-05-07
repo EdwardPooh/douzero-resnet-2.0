@@ -106,7 +106,7 @@ class Env:
             done = True
             reward = {
                 "play": {
-                    "landlord": self._get_reward("landlord"),
+                    "landlord": self._get_reward("landlord") / 2,
                     "landlord_down": self._get_reward("landlord_down"),
                     "landlord_up": self._get_reward("landlord_up"),
                     "first": self._get_reward_bidding("first"),
@@ -132,21 +132,21 @@ class Env:
         bomb_num = self._game_bomb_num
         self_bomb_num = self._env.pos_bomb_num[pos]
         bid_count = self._env.bid_count
-        spring = 1.4 if self._env.spring else 1
+        spring = 2 if self._env.spring else 1
         multiply = 2
         if pos != 'landlord':
             pos = 'farmer'
             multiply = 1
         if pos == winner:
             if self.objective == 'adp':
-                return (1.1 - self._env.step_count * 0.0033) * 1.3 ** (bomb_num + bid_count) * spring * multiply / 8
+                return (1.1 - self._env.step_count * 0.0033) * 2 ** bomb_num * spring * multiply / 8
             elif self.objective == 'logadp':
                 return (1.0 - self._env.step_count * 0.0033) * 1.3**self_bomb_num / 4
             else:
                 return 1.0 - self._env.step_count * 0.0033
         else:
             if self.objective == 'adp':
-                return (-1.1 + self._env.step_count * 0.0033) * 1.3 ** (bomb_num + bid_count) * spring * multiply / 8
+                return (-1.1 + self._env.step_count * 0.0033) * 2 ** bomb_num * spring * multiply / 8
             elif self.objective == 'logadp':
                 return (-1.0 + self._env.step_count * 0.0033) * 1.3**self_bomb_num / 4
             else:
@@ -160,14 +160,14 @@ class Env:
         """
         winner = self._bid_winner
         bomb_num = self._game_bomb_num
-        bid_count = self._env.bid_count
-        spring = 1.4 if self._env.spring else 1
+        bid_count = self._env.bid_count - 1
+        spring = 2 if self._env.spring else 1
         multiply = 1 if '&' in winner else 2
         _multiply = 2 if multiply == 1 else 1
         if pos in winner:
-            return (1.1 - self._env.step_count * 0.0033) * 1.3 ** (bomb_num + bid_count) * spring * multiply / 8
+            return (1.1 - self._env.step_count * 0.0033) * 2 ** (bomb_num + bid_count) * spring * multiply / 8
         else:
-            return (-1.1 + self._env.step_count * 0.0033) * 1.3 ** (bomb_num + bid_count) * spring * _multiply / 8
+            return (-1.1 + self._env.step_count * 0.0033) * 2 ** (bomb_num + bid_count) * spring * _multiply / 8
 
     @property
     def _game_infoset(self):
@@ -465,16 +465,14 @@ def _get_obs_resnet(infoset):
                   landlord_played_cards,  # 54
                   landlord_up_played_cards,  # 54
                   landlord_down_played_cards,  # 54
-                  _action_seq_list2array(_process_action_seq(infoset.card_play_action_seq, 33))
+                  _action_seq_list2array(_process_action_seq(infoset.card_play_action_seq, 42))
                   ))
 
     _z_batch = np.repeat(
         z[np.newaxis, :, :],
         num_legal_actions, axis=0)
     my_action_batch = my_action_batch[:, np.newaxis, :]
-    z_batch = np.zeros([len(_z_batch), 68, 54], int)
-    for i in range(0, len(_z_batch)):
-        z_batch[i] = np.vstack((my_action_batch[i], _z_batch[i]))
+    z_batch = np.concatenate((my_action_batch, _z_batch), axis=1)
     obs = {
         'position': infoset.player_position,
         'x_batch': x_batch.astype(np.float32),

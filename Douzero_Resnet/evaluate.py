@@ -5,18 +5,20 @@ from douzero.evaluation.simulation import evaluate
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Dou Dizhu Evaluation')
+    bid = 57636000
     parser.add_argument('--player_1_bid', type=str, default='random')
-
+    # parser.add_argument('--player_1_bid', type=str, default='douzero_checkpoints/douzero/general_first_' + str(bid) + '.ckpt')
     parser.add_argument('--player_2_bid', type=str, default='random')
-
+    # parser.add_argument('--player_2_bid', type=str, default='douzero_checkpoints/douzero/general_second_' + str(bid) + '.ckpt')
     parser.add_argument('--player_3_bid', type=str, default='random')
+    # parser.add_argument('--player_3_bid', type=str, default='douzero_checkpoints/douzero/general_third_' + str(bid) + '.ckpt')
 
-    parser.add_argument('--player_1_playcard', type=str,
-                        default='douzero_checkpoints/douzero/general_landlord_3840800.ckpt')
+    parser.add_argument('--player_1_playcard', type=str, default='douzero_checkpoints/douzero/general_landlord_57636000.ckpt')
+    # parser.add_argument('--player_1_playcard', type=str, default='baseline/test/landlord.ckpt')
 
-    parser.add_argument('--player_2_playcard', type=str, default='random')
+    parser.add_argument('--player_2_playcard', type=str, default='baseline/test/landlord_down.ckpt')
 
-    parser.add_argument('--player_3_playcard', type=str, default='random')
+    parser.add_argument('--player_3_playcard', type=str, default='baseline/test/landlord_up.ckpt')
 
     parser.add_argument('--eval_data', type=str, default='eval_data.pkl')
     parser.add_argument('--num_workers', type=int, default=1)

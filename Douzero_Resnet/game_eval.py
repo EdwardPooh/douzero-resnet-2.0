@@ -46,8 +46,6 @@ class GameEnv(object):
 
         self.position = ['landlord', 'landlord_down', 'landlord_up']
 
-        self.bid_infoset = None
-
         self.draw = False
 
         self.bid_step_count = 0
@@ -102,8 +100,6 @@ class GameEnv(object):
 
         self.step_count = 0
 
-        self.game_infoset = None
-
         self.spring = True
 
         self.spring_count = {'landlord': 0,
@@ -122,7 +118,7 @@ class GameEnv(object):
             card_play_data['third']
         self.three_landlord_cards = card_play_data['three_landlord_cards']
         self.get_bidding_player_position()
-        self.bid_infoset = self.get_bid_infoset()
+        self.get_bid_infoset()
 
     def bid_done(self):
         if self.bid_step_count == 3:
@@ -182,9 +178,9 @@ class GameEnv(object):
 
     def bid_step(self):
         if not isinstance(self.players[self.bidding_player_position], dict):
-            action = self.players[self.bidding_player_position].act(self.bid_infoset)
+            action = self.players[self.bidding_player_position].act(self.bid_info_sets[self.bidding_player_position])
         else:
-            action = self.players[self.bidding_player_position][self.bidding_player_position].act(self.bid_infoset)
+            action = self.players[self.bidding_player_position][self.bidding_player_position].act(self.bid_info_sets[self.bidding_player_position])
         action_list = None
         if len(action) == 2:
             action, action_list = action
@@ -201,7 +197,7 @@ class GameEnv(object):
 
         if (not self.bid_over) and (not self.draw):
             self.get_bidding_player_position()
-            self.bid_infoset = self.get_bid_infoset()
+            self.get_bid_infoset()
         # 流局的情况
         elif self.draw:
             self.compute_player_utility()
@@ -210,7 +206,7 @@ class GameEnv(object):
             # print(self.bid_count)
         # 叫牌正常结束
         else:
-            self.bid_infoset = self.get_bid_infoset()
+            self.get_bid_infoset()
         return action, action_list
 
     def get_bidding_player_position(self):
@@ -253,8 +249,6 @@ class GameEnv(object):
             self.bid_info_sets[pos].bid_info = \
                 self.bid_info
 
-        return deepcopy(self.bid_info_sets[self.bidding_player_position])
-
     def card_play_init(self):
         self.info_sets[self.bid_info_sets["first"].play_card_position].player_hand_cards = \
             self.bid_info_sets["first"].player_hand_cards
@@ -284,7 +278,7 @@ class GameEnv(object):
                         'landlord_up': agent[5],
                         }
         self.get_acting_player_position()
-        self.game_infoset = self.get_infoset()
+        self.get_infoset()
 
     def game_done(self):
         if len(self.info_sets['landlord'].player_hand_cards) == 0 or \
@@ -379,7 +373,7 @@ class GameEnv(object):
 
     def step(self):
         if self.bid_over and not self.draw:
-            action = self.players[self.acting_player_position].act(self.game_infoset)
+            action = self.players[self.acting_player_position].act(self.info_sets[self.acting_player_position])
             action_list = None
             self.step_count += 1
             if len(action) > 0:
@@ -411,7 +405,7 @@ class GameEnv(object):
             self.game_done()
             if not self.game_over:
                 self.get_acting_player_position()
-                self.game_infoset = self.get_infoset()
+                self.get_infoset()
             return action, action_list
         elif not self.bid_over:
             return self.bid_step()
@@ -577,8 +571,6 @@ class GameEnv(object):
 
         self.position = ['landlord', 'landlord_down', 'landlord_up']
 
-        self.bid_infoset = None
-
         self.draw = False
 
         self.bid_step_count = 0
@@ -619,8 +611,6 @@ class GameEnv(object):
         self.last_pid = 'landlord'
 
         self.step_count = 0
-
-        self.game_infoset = None
 
         self.spring = True
 
@@ -680,7 +670,6 @@ class GameEnv(object):
             {pos: self.info_sets[pos].player_hand_cards
              for pos in ['landlord', 'landlord_up', 'landlord_down']}
 
-        return deepcopy(self.info_sets[self.acting_player_position])
 
 class InfoSet(object):
     """

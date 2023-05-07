@@ -84,7 +84,8 @@ def train(flags):
     # Initialize actor models
     models = {}
     for device in device_iterator:
-        model = Model(device="cpu")
+        # model = Model(device="cpu")
+        model = Model(device=device)
         model.share_memory()
         model.eval()
         models[device] = model
@@ -138,7 +139,7 @@ def train(flags):
     for device in device_iterator:
         num_actors = flags.num_actors
         for i in range(flags.num_actors):
-            actor = mp.Process(
+            actor = ctx.Process(
                 target=act,
                 args=(i, device, batch_queues, models[device], flags))
             # actor.setDaemon(True)

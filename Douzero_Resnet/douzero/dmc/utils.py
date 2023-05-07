@@ -9,7 +9,7 @@ from douzero.radam.radam import RAdam
 import random
 import torch
 from torch import multiprocessing as mp
-
+from torch.distributions import Categorical
 from .env_utils import Environment
 from douzero.env import Env
 
@@ -73,8 +73,8 @@ def create_optimizers(flags, learner_model):
 
 def act(i, device, batch_queues, model, flags):
     positions = ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']
-    for pos in positions:
-        model.get_model(pos).to(torch.device(device if device == "cpu" else ("cuda:"+str(device))))
+    # for pos in positions:
+        # model.get_model(pos).to(torch.device(device if device == "cpu" else ("cuda:"+str(device))))
     try:
         T = flags.unroll_length
         log.info('Device %s Actor %i started.', str(device), i)
@@ -94,19 +94,27 @@ def act(i, device, batch_queues, model, flags):
         while True:
             bid_count = 0
             while True:
-                if len(obs['legal_actions']) > 1:
-                    with torch.no_grad():
-                        agent_output = model.forward(position, obs['z_batch'], obs['x_batch'], flags=flags)
-                    _action_idx = int(agent_output['action'].cpu().detach().numpy())
+                with torch.no_grad():
+                    agent_output = model.forward(position, obs['z_batch'], obs['x_batch'], flags=flags)
+                if len(agent_output['values']) > 1:
+                    v = agent_output['values'].T.to(device)
+                    mean = v.mean()
+                    std = v.std()
+                    v = (v - mean) / (std + 1e-8)
+                    probs = torch.softmax((v - v.max()) / flags.temperature, dim=1)
+                    dist_now = Categorical(probs=probs)
+                    _action_idx = int(dist_now.sample().cpu().detach().numpy())
+                    action = obs['legal_actions'][_action_idx]
+                    if len(action) == 1 and (action[0] == 0 or action[0] == 1) and random.random() > flags.bid_exp_epsilon:
+                        action[0] ^= 1
+                    if len(action) == 1 and (action[0] == 0 or action[0] == 1):
+                        obs_z_buf[position].append(torch.vstack((torch.full((1, 54), action[0]), env_output['obs_z'])).float())
+                    else:
+                        obs_z_buf[position].append(
+                            torch.vstack((_cards2tensor(action).unsqueeze(0), env_output['obs_z'])).float())
                 else:
                     _action_idx = 0
-                action = obs['legal_actions'][_action_idx]
-                if len(action) == 1 and (action[0] == 0 or action[0] == 1) and random.random() >= 0.85:
-                    action[0] ^= 1
-                if len(action) == 1 and (action[0] == 0 or action[0] == 1):
-                    env_output['obs_z'][0, bid_count - 1] = action[0]
-                    obs_z_buf[position].append(torch.vstack((torch.full((1, 54), -1), env_output['obs_z'])).float())
-                else:
+                    action = obs['legal_actions'][0]
                     obs_z_buf[position].append(
                         torch.vstack((_cards2tensor(action).unsqueeze(0), env_output['obs_z'])).float())
                 x_batch = env_output['obs_x_no_action'].float()
@@ -131,9 +139,9 @@ def act(i, device, batch_queues, model, flags):
                         "episode_return": torch.stack(
                             [torch.tensor(ndarr, device="cpu") for ndarr in episode_return_buf[p][:T]]),
                         "target": torch.stack([torch.tensor(ndarr, device="cpu") for ndarr in target_buf[p][:T]]),
-                        "obs_z": torch.stack([torch.tensor(ndarr, device="cpu") for ndarr in obs_z_buf[p][:T]]),
+                        "obs_z": torch.stack([ndarr.clone().detach() for ndarr in obs_z_buf[p][:T]]),
                         "obs_x_batch": torch.stack(
-                            [torch.tensor(ndarr, device="cpu") for ndarr in obs_x_batch_buf[p][:T]]),
+                            [ndarr.clone().detach() for ndarr in obs_x_batch_buf[p][:T]]),
                     })
                     done_buf[p] = done_buf[p][T:]
                     episode_return_buf[p] = episode_return_buf[p][T:]

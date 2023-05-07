@@ -2,12 +2,16 @@ import torch
 import numpy as np
 
 from douzero.env.env import get_obs
+from douzero.env.env_douzero import get_obs_douzero
+from douzero.env.env_res import _get_obs_resnet
 
 def _load_model(position, model_path, model_type):
-    from douzero.dmc.models import model_dict_new, model_dict
-    model = None
-    if model_type == "general":
-        model = model_dict_new[position]()
+    from douzero.dmc.models import model_dict, model_dict_douzero
+    if model_type == "test":
+        model = model_dict_douzero[position]()
+    elif model_type == "best":
+        from douzero.dmc.models_res import model_dict_resnet
+        model = model_dict_resnet[position]()
     else:
         model = model_dict[position]()
     model_state_dict = model.state_dict()
@@ -27,16 +31,24 @@ def _load_model(position, model_path, model_type):
 class DeepAgent:
 
     def __init__(self, position, model_path):
-        self.model_type = "general" if "resnet" in model_path else "old"
+        if "test" in model_path:
+            self.model_type = "test"
+        elif "best" in model_path:
+            self.model_type = "best"
+        else:
+            self.model_type = "new"
         self.model = _load_model(position, model_path, self.model_type)
         self.EnvCard2RealCard = {3: '3', 4: '4', 5: '5', 6: '6', 7: '7',
                             8: '8', 9: '9', 10: 'T', 11: 'J', 12: 'Q',
                             13: 'K', 14: 'A', 17: '2', 20: 'X', 30: 'D'}
-    def act(self, infoset):
-        if len(infoset.legal_actions) == 1:
-            return infoset.legal_actions[0]
 
-        obs = get_obs(infoset, self.model_type == "general")
+    def act(self, infoset):
+        if self.model_type == "test":
+            obs = get_obs_douzero(infoset)
+        elif self.model_type == "best":
+            obs = _get_obs_resnet(infoset, infoset.player_position)
+        else:
+            obs = get_obs(infoset, bid_over=infoset.bid_over, new_model=True)
 
         z_batch = torch.from_numpy(obs['z_batch']).float()
         x_batch = torch.from_numpy(obs['x_batch']).float()
@@ -47,16 +59,6 @@ class DeepAgent:
 
         best_action_index = np.argmax(y_pred, axis=0)[0]
         best_action = infoset.legal_actions[best_action_index]
-        # action_list = []
-        # output = ""
-        # for i, action in enumerate(y_pred):
-        #     action_list.append((y_pred[i].item(), "".join([self.EnvCard2RealCard[ii] for ii in infoset.legal_actions[i]]) if len(infoset.legal_actions[i]) != 0 else "Pass"))
-        # action_list.sort(key=lambda x: x[0], reverse=True)
-        # value_list = []
-        # for action in action_list:
-        #     output += str(round(action[0],3)) + " " + action[1] + "\n"
-        #     value_list.append(action[0])
-        # # print(value_list)
-        # print(output)
-        # print("--------------------\n")
+        if obs["position"] == "landlord":
+            ccc = 1
         return best_action
