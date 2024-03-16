@@ -57,9 +57,11 @@ class Environment:
             self.episode_return = torch.zeros(1, 1)
         if draw:
             obs = self.env.reset(model, device, flags=flags)
+            self.episode_return = torch.zeros(1, 1)
         position, obs, x_no_action, z = _format_observation(obs, self.device)
         # reward = torch.tensor(reward).view(1, 1)
         done = torch.tensor(done).view(1, 1)
+        draw = torch.tensor(draw).view(1, 1)
 
         if buf is None:
             return position, obs, dict(

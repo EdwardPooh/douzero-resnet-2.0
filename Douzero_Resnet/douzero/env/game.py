@@ -31,7 +31,7 @@ class GameEnv(object):
 
         self.bid_action_seq = []
 
-        self.bid_info = [-1, -1, -1, -1]
+        self.bid_info = [-1, -1, -1]
 
         self.bid_count = 0
 
@@ -116,42 +116,21 @@ class GameEnv(object):
         self.bid_infoset = self.get_bid_infoset()
 
     def bid_done(self):
-        if self.bid_step_count == 3:
-            if self.bid_info == [0, 0, 0, -1]:
-                self.bid_over = True
-                self.draw = True
-            elif self.bid_info == [1, 0, 0, -1]:
-                self.bid_over = True
-            elif self.bid_info == [0, 1, 0, -1]:
-                self.bid_over = True
-                self.position = ['landlord_up', 'landlord', 'landlord_down']
-            elif self.bid_info == [0, 0, 1, -1]:
-                self.bid_over = True
-                self.position = ['landlord_down', 'landlord_up', 'landlord']
-        elif self.bid_step_count == 4:
+        if self.bid_count == 3:
             self.bid_over = True
-            if self.bid_info[3] == 1:
-                for i in range(3):
-                    if self.bid_info[i] == 1:
-                        self.position[i] = 'landlord'
-                        self.position[(i+1)] = 'landlord_down'
-                        if i + 2 > 2:
-                            self.position[0] = 'landlord_up'
-                        else:
-                            self.position[2] = 'landlord_up'
-                        break
+        elif self.bid_step_count == 3:
+            self.bid_over = True
+            if self.bid_info == [0, 0, 0]:
+                self.draw = True
             else:
-                for i in range(2, -1, -1):
-                    if self.bid_info[i] == 1:
-                        self.position[i] = 'landlord'
-                        self.position[(i-1)] = 'landlord_up'
-                        if i - 1 < 0:
-                            self.position[2] = 'landlord_down'
-                        else:
-                            self.position[0] = 'landlord_down'
-                        break
+                max_index = self.bid_info.index(max(self.bid_info))
+                if max_index == 0:
+                    self.position = ['landlord', 'landlord_down', 'landlord_up']
+                elif max_index == 1:
+                    self.position = ['landlord_up', 'landlord', 'landlord_down']
+                elif max_index == 2:
+                    self.position = ['landlord_down', 'landlord_up', 'landlord']
         if self.bid_over:
-            # print(self.position)
             self.bid_info_sets['first'].play_card_position = self.position[0]
             self.bid_info_sets['second'].play_card_position = self.position[1]
             self.bid_info_sets['third'].play_card_position = self.position[2]
@@ -178,8 +157,8 @@ class GameEnv(object):
 
         self.bid_step_count += 1
 
-        if action[0] == 1:
-            self.bid_count += 1
+        if action[0] > 0:
+            self.bid_count = action[0]
 
         self.bid_action_seq.append((self.bidding_player_position, action))
 
@@ -200,20 +179,11 @@ class GameEnv(object):
     def get_bidding_player_position(self):
         if self.bidding_player_position is None:
             self.bidding_player_position = 'first'
-
         else:
-            if self.bid_step_count < 3:
-                if self.bidding_player_position == 'first':
-                    self.bidding_player_position = 'second'
-
-                elif self.bidding_player_position == 'second':
-                    self.bidding_player_position = 'third'
-            else:
-                if self.bid_info[0] == 0:
-                    self.bidding_player_position = 'second'
-                else:
-                    self.bidding_player_position = 'first'
-
+            if self.bidding_player_position == 'first':
+                self.bidding_player_position = 'second'
+            elif self.bidding_player_position == 'second':
+                self.bidding_player_position = 'third'
         return self.bidding_player_position
 
     def get_bid_infoset(self):
@@ -284,55 +254,69 @@ class GameEnv(object):
 
     def update_num_wins_scores(self):
         for pos, utility in self.player_utility_dict.items():
-            base_score = 2 * 2 ** (self.bid_count - 1) if pos == 'landlord' else 2 ** (self.bid_count - 1)
+            base_score = 2 * self.bid_count if pos == 'landlord' else self.bid_count
             if utility > 0:
                 self.num_wins[pos] += 1
                 self.winner = pos
+                bomb_num = self.bomb_num + 1 if self.spring else self.bomb_num
+                if bomb_num == 0:
+                    s = base_score
+                elif bomb_num == 1:
+                    s = base_score * (1 + bomb_num)
+                else:
+                    s = base_score * (2 + 2 * (bomb_num - 1))
                 if pos == "landlord":
                     if pos == self.bid_info_sets["first"].play_card_position:
                         self.bid_winner = "first"
                         self.num_wins["first"] += 1
-                        self.num_scores["first"] += base_score * (1 + self.bomb_num)
-                        self.num_scores["second"] -= base_score * (1 + self.bomb_num)
-                        self.num_scores["third"] -= base_score * (1 + self.bomb_num)
+                        self.num_scores["first"] += s
+                        self.num_scores["second"] -= s / 2
+                        self.num_scores["third"] -= s / 2
                     elif pos == self.bid_info_sets["second"].play_card_position:
                         self.bid_winner = "second"
                         self.num_wins["second"] += 1
-                        self.num_scores["first"] -= base_score * (1 + self.bomb_num)
-                        self.num_scores["second"] += base_score * (1 + self.bomb_num)
-                        self.num_scores["third"] -= base_score * (1 + self.bomb_num)
+                        self.num_scores["first"] -= s / 2
+                        self.num_scores["second"] += s
+                        self.num_scores["third"] -= s / 2
                     else:
                         self.bid_winner = "third"
                         self.num_wins["third"] += 1
-                        self.num_scores["first"] -= base_score * (1 + self.bomb_num)
-                        self.num_scores["second"] -= base_score * (1 + self.bomb_num)
-                        self.num_scores["third"] += base_score * (1 + self.bomb_num)
+                        self.num_scores["first"] -= s / 2
+                        self.num_scores["second"] -= s / 2
+                        self.num_scores["third"] += s
                 else:
                     if self.bid_info_sets["first"].play_card_position == "landlord":
                         self.bid_winner = "second & third"
                         self.num_wins["second"] += 1
                         self.num_wins["third"] += 1
-                        self.num_scores["first"] -= base_score * (1 + self.bomb_num)
-                        self.num_scores["second"] += base_score * (1 + self.bomb_num)
-                        self.num_scores["third"] += base_score * (1 + self.bomb_num)
+                        self.num_scores["first"] -= s * 2
+                        self.num_scores["second"] += s
+                        self.num_scores["third"] += s
                     elif self.bid_info_sets["second"].play_card_position == "landlord":
                         self.bid_winner = "first & third"
                         self.num_wins["first"] += 1
                         self.num_wins["third"] += 1
-                        self.num_scores["first"] += base_score * (1 + self.bomb_num)
-                        self.num_scores["second"] -= base_score * (1 + self.bomb_num)
-                        self.num_scores["third"] += base_score * (1 + self.bomb_num)
+                        self.num_scores["first"] += s
+                        self.num_scores["second"] -= s * 2
+                        self.num_scores["third"] += s
                     else:
                         self.bid_winner = "first & second"
                         self.num_wins["second"] += 1
                         self.num_wins["first"] += 1
-                        self.num_scores["first"] += base_score * (1 + self.bomb_num)
-                        self.num_scores["second"] += base_score * (1 + self.bomb_num)
-                        self.num_scores["third"] -= base_score * (1 + self.bomb_num)
+                        self.num_scores["first"] += s
+                        self.num_scores["second"] += s
+                        self.num_scores["third"] -= s * 2
 
-                self.num_scores[pos] += base_score * (2 ** self.bomb_num)
+                self.num_scores[pos] += s
             elif utility < 0:
-                self.num_scores[pos] -= base_score * (2 ** self.bomb_num)
+                bomb_num = self.bomb_num + 1 if self.spring else self.bomb_num
+                if bomb_num == 0:
+                    s = base_score
+                elif bomb_num == 1:
+                    s = base_score * (1 + bomb_num)
+                else:
+                    s = base_score * (2 + 2 * (bomb_num - 1))
+                self.num_scores[pos] -= s
             else:
                 self.num_wins['draw'] += 1
                 break
@@ -363,6 +347,7 @@ class GameEnv(object):
         if self.bid_over and not self.draw:
             action = self.players[self.acting_player_position].act(
                 self.game_infoset)
+
             self.step_count += 1
             if len(action) > 0:
                 self.last_pid = self.acting_player_position
@@ -533,7 +518,12 @@ class GameEnv(object):
             return moves
 
         else:
-            return [[0], [1]]
+            if self.bid_count == 0:
+                return [[0], [1], [2], [3]]
+            elif self.bid_count == 1:
+                return [[0], [2], [3]]
+            elif self.bid_count == 2:
+                return [[0], [3]]
 
     def reset(self):
         self.bid_over = False
@@ -546,7 +536,7 @@ class GameEnv(object):
 
         self.bid_action_seq = []
 
-        self.bid_info = [-1, -1, -1, -1]
+        self.bid_info = [-1, -1, -1]
 
         self.bid_count = 0
 
@@ -657,6 +647,7 @@ class GameEnv(object):
 
         return deepcopy(self.info_sets[self.acting_player_position])
 
+
 class InfoSet(object):
     """
     The game state is described as infoset, which
@@ -678,7 +669,7 @@ class InfoSet(object):
 
         self.bid_action_seq = None
 
-        self.bid_info = [-1, -1, -1, -1]
+        self.bid_info = [-1, -1, -1]
         # The historical moves. It is a list of list
         self.card_play_action_seq = None
         # The union of the hand cards of the other two players for the current player

@@ -579,20 +579,30 @@ def _get_obs_resnet(infoset, position):
     if infoset.player_position == "landlord":
         bid_info = np.array([[1, 0.5, 1],
                              [1, 1, 1],
-                             [1, 1, -4],
+                             [1, 5, -4],
                              [1, 1, 1]]).flatten()
+        # bid_info = np.array([[1, 1, 1],
+        #                      [1, 1, 1],
+        #                      [1, 1, 1],
+        #                      [1, 1, 1]]).flatten()
     else:
         bid_info = np.array([[1, 0.2, 1],
                              [1, 3.5, 1],
-                             [1, 1, 1],
-                             [1, 1, 0.15]]).flatten()
+                             [1, 5, 4],
+                             [1.035, 1, 0.15]]).flatten()
+        # bid_info = np.array([[1, 1, 1],
+        #                      [1, 1, 1],
+        #                      [1, 1, 1],
+        #                      [1, 1, 1]]).flatten()
 
     bid_info_batch = np.repeat(bid_info[np.newaxis, :],
                                num_legal_actions, axis=0)
     if infoset.player_position == "landlord":
+        # multiply_info = np.array([1, 0.8, 1.3])
         multiply_info = np.array([1, 1, 1])
     else:
         multiply_info = np.array([1, 2.5, 1.2])
+        # multiply_info = np.array([1, 1, 1])
     multiply_info_batch = np.repeat(multiply_info[np.newaxis, :],
                                     num_legal_actions, axis=0)
 

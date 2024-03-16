@@ -1,6 +1,7 @@
 import os
 
-from douzero.dmc import parser, train
+from douzero.dmc import parser
+from douzero.dmc.dmc import train
 
 if __name__ == '__main__':
     flags = parser.parse_args()

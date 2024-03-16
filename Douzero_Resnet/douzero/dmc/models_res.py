@@ -297,9 +297,6 @@ class ResnetModel(nn.Module):
             return dict(action=action, max_value=torch.max(out))
 
 
-
-
-
 class BidModel(nn.Module):
     def __init__(self):
         super().__init__()
@@ -338,6 +335,54 @@ class BidModel(nn.Module):
             return dict(action=action, max_value=torch.max(x))
 
 
+class GeneralModelBid(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.in_planes = 14
+        # input 1*54*22
+        self.conv1 = nn.Conv1d(7, 14, kernel_size=(3,),
+                               stride=(2,), padding=1, bias=False)  # 1*27*12
+
+        self.bn1 = nn.BatchNorm1d(14)
+
+        self.layer1 = self._make_layer(BasicBlock, 14, 2, stride=2)  # 1*14*12
+        self.layer2 = self._make_layer(BasicBlock, 28, 2, stride=2)  # 1*7*24
+        self.layer3 = self._make_layer(BasicBlock, 56, 2, stride=2)  # 1*4*48
+        self.linear1 = nn.Linear(56 * BasicBlock.expansion * 4, 256)
+        self.linear2 = nn.Linear(256, 256)
+        self.linear3 = nn.Linear(256, 256)
+        self.linear4 = nn.Linear(256, 128)
+        self.linear5 = nn.Linear(128, 1)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
+    def forward(self, z, x, return_value=False, flags=None, debug=False):
+        out = F.relu(self.bn1(self.conv1(z)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = out.flatten(1, 2)
+        out = F.leaky_relu_(self.linear1(out))
+        out = F.leaky_relu_(self.linear2(out))
+        out = F.leaky_relu_(self.linear3(out))
+        out = F.leaky_relu_(self.linear4(out))
+        out = F.leaky_relu_(self.linear5(out))
+        if return_value:
+            return dict(values=out)
+        else:
+            if flags is not None and flags.exp_epsilon > 0 and np.random.rand() < flags.exp_epsilon:
+                action = torch.randint(out.shape[0], (1,))[0]
+            else:
+                action = torch.argmax(out, dim=0)[0]
+            return dict(action=action, max_value=torch.max(out), values=out)
+
+
 # Model dict is only used in evaluation but not training
 model_dict = {}
 model_dict['landlord'] = LandlordLstmModel
@@ -364,27 +409,35 @@ class General_Model:
         self.models = {}
         if not device == "cpu":
             device = 'cuda:' + str(device)
-        # model = GeneralModel().to(torch.device(device))
-        self.models['landlord'] = GeneralModel1().to(torch.device(device))
-        self.models['landlord_up'] = GeneralModel1().to(torch.device(device))
-        self.models['landlord_down'] = GeneralModel1().to(torch.device(device))
-        self.models['bidding'] = BidModel().to(torch.device(device))
+
+        self.models = {
+            'first': GeneralModelBid().to(torch.device(device)),
+            'second': GeneralModelBid().to(torch.device(device)),
+            'third': GeneralModelBid().to(torch.device(device)),
+            'landlord': ResnetModel().to(torch.device(device)),
+            'landlord_down': ResnetModel().to(torch.device(device)),
+            'landlord_up': ResnetModel().to(torch.device(device)),
+        }
 
     def forward(self, position, z, x, training=False, flags=None, debug=False):
         model = self.models[position]
         return model.forward(z, x, training, flags, debug)
 
     def share_memory(self):
+        self.models['first'].share_memory()
+        self.models['second'].share_memory()
+        self.models['third'].share_memory()
         self.models['landlord'].share_memory()
-        self.models['landlord_up'].share_memory()
         self.models['landlord_down'].share_memory()
-        self.models['bidding'].share_memory()
+        self.models['landlord_up'].share_memory()
 
     def eval(self):
+        self.models['first'].eval()
+        self.models['second'].eval()
+        self.models['third'].eval()
         self.models['landlord'].eval()
-        self.models['landlord_up'].eval()
         self.models['landlord_down'].eval()
-        self.models['bidding'].eval()
+        self.models['landlord_up'].eval()
 
     def parameters(self, position):
         return self.models[position].parameters()

@@ -1,27 +1,49 @@
 import os
 import argparse
-
 from douzero.evaluation.simulation import evaluate
+import random
+import numpy as np
+import torch
+
+# 设置 random 模块的随机数种子
+random.seed(78419)
+# 设置 NumPy 的随机数种子
+np.random.seed(78419)
+# 设置 PyTorch 的随机数种子
+torch.manual_seed(78419)
+# 如果你的代码也将在CUDA设备上运行，还需要为所有GPU设置随机数种子
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(78419)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Dou Dizhu Evaluation')
-    bid = 57636000
+    num = 10829373000
+
+    bid = 390318600
+
     parser.add_argument('--player_1_bid', type=str, default='random')
-    # parser.add_argument('--player_1_bid', type=str, default='douzero_checkpoints/douzero/general_first_' + str(bid) + '.ckpt')
+    # parser.add_argument('--player_1_bid', type=str, default='Supervised')
+    # parser.add_argument('--player_1_bid', type=str, default='baseline/bid/first_' + str(bid) + '.ckpt')
     parser.add_argument('--player_2_bid', type=str, default='random')
-    # parser.add_argument('--player_2_bid', type=str, default='douzero_checkpoints/douzero/general_second_' + str(bid) + '.ckpt')
+    # parser.add_argument('--player_2_bid', type=str, default='Supervised')
+    # parser.add_argument('--player_2_bid', type=str, default='baseline/bid/second_' + str(bid) + '.ckpt')
     parser.add_argument('--player_3_bid', type=str, default='random')
-    # parser.add_argument('--player_3_bid', type=str, default='douzero_checkpoints/douzero/general_third_' + str(bid) + '.ckpt')
+    # parser.add_argument('--player_3_bid', type=str, default='Supervised')
+    # parser.add_argument('--player_3_bid', type=str, default='baseline/bid/third_' + str(bid) + '.ckpt')
 
-    parser.add_argument('--player_1_playcard', type=str, default='douzero_checkpoints/douzero/general_landlord_57636000.ckpt')
-    # parser.add_argument('--player_1_playcard', type=str, default='baseline/test/landlord.ckpt')
-
-    parser.add_argument('--player_2_playcard', type=str, default='baseline/test/landlord_down.ckpt')
-
-    parser.add_argument('--player_3_playcard', type=str, default='baseline/test/landlord_up.ckpt')
+    parser.add_argument('--player_1_playcard', type=str, default='check/landlord_49703000.ckpt')
+    # parser.add_argument('--player_1_playcard', type=str, default='baseline/best/resnet_landlord.ckpt')
+    # parser.add_argument('--player_1_playcard', type=str, default='baseline/best/landlord.ckpt')
+    # parser.add_argument('--player_2_playcard', type=str, default='douzero_checkpoints/douzero/landlord_down_' + str(num) + '.ckpt')
+    parser.add_argument('--player_2_playcard', type=str, default='baseline/best/landlord_down.ckpt')
+    # parser.add_argument('--player_2_playcard', type=str, default='baseline/best/resnet_landlord_down.ckpt')
+    # parser.add_argument('--player_3_playcard', type=str, default='douzero_checkpoints/douzero/landlord_up_' + str(num) + '.ckpt')
+    parser.add_argument('--player_3_playcard', type=str, default='baseline/best/landlord_up.ckpt')
+    # parser.add_argument('--player_3_playcard', type=str, default='baseline/best/resnet_landlord_up.ckpt')
 
     parser.add_argument('--eval_data', type=str, default='eval_data.pkl')
-    parser.add_argument('--num_workers', type=int, default=1)
+    parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--gpu_device', type=str, default='')
     args = parser.parse_args()
 
@@ -40,6 +62,7 @@ if __name__ == '__main__':
         args.player_1_playcard = 'random'
         args.player_2_playcard = 'random'
         args.player_3_playcard = 'random'
+
 
     evaluate(args.player_1_bid,
              args.player_2_bid,

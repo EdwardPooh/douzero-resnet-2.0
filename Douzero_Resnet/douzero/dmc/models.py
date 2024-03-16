@@ -6,9 +6,33 @@ import json
 
 import numpy as np
 
+import torch.nn.functional as F
 import torch
 from torch import nn
-import torch.nn.functional as F
+
+
+class Block(nn.Module):
+    def __init__(self, dim, layer_scale_init_value=1e-6):
+        super().__init__()
+        self.dwconv = nn.Conv1d(dim, dim, kernel_size=7, padding=3, groups=dim)  # depthwise conv
+        self.norm = LayerNorm(dim, eps=1e-6)
+        self.pwconv1 = nn.Linear(dim, 4 * dim)  # pointwise/1x1 convs, implemented with linear layers
+        self.act = nn.GELU()
+        self.pwconv2 = nn.Linear(4 * dim, dim)
+        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)),
+                                  requires_grad=True) if layer_scale_init_value > 0 else None
+
+    def forward(self, x):
+        x = self.dwconv(x)
+        x = x.permute(0, 2, 1)  # Adjusting for 1D: (N, C, L) -> (N, L, C)
+        x = self.norm(x)
+        x = self.pwconv1(x)
+        x = self.act(x)
+        x = self.pwconv2(x)
+        if self.gamma is not None:
+            x = self.gamma * x
+        x = x.permute(0, 2, 1)  # Adjusting back: (N, L, C) -> (N, C, L)
+        return x
 
 
 class Bottleneck(nn.Module):
@@ -76,21 +100,14 @@ class BasicBlock(nn.Module):
 class GeneralModelResnet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.in_planes = 82
-        # input 1*54*68
-        self.conv1 = nn.Conv1d(50, 82, kernel_size=(3,),
-                               stride=(2,), padding=1, bias=False)  # 1*27*136
-
-        self.bn1 = nn.BatchNorm1d(82)
-
-        self.layer1 = self._make_layer(BasicBlock, 82, 2, stride=2)  # 1*14*82
-        self.layer2 = self._make_layer(BasicBlock, 164, 2, stride=2)  # 1*7*164
-        self.layer3 = self._make_layer(BasicBlock, 328, 2, stride=2)  # 1*4*328
-        self.linear1 = nn.Linear(328 * BasicBlock.expansion * 4 + 19 * 2, 2048)
-        self.linear2 = nn.Linear(2048, 1024)
-        self.linear3 = nn.Linear(1024, 512)
-        self.linear4 = nn.Linear(512, 256)
-        self.linear5 = nn.Linear(256, 1)
+        self.in_planes = 72
+        self.layer1 = self._make_layer(BasicBlock, 72, 3, stride=2)  # 1*27*72
+        self.layer2 = self._make_layer(BasicBlock, 144, 3, stride=2)  # 1*14*146
+        self.layer3 = self._make_layer(BasicBlock, 288, 3, stride=2)  # 1*7*292
+        self.linear1 = nn.Linear(288 * BasicBlock.expansion * 7 + 18 * 4, 2048)
+        self.linear2 = nn.Linear(2048, 512)
+        self.linear3 = nn.Linear(512, 128)
+        self.linear4 = nn.Linear(128, 1)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -102,45 +119,38 @@ class GeneralModelResnet(nn.Module):
 
     def forward(self, z, x, return_value=False, flags=None, debug=False):
 
-        out = F.relu(self.bn1(self.conv1(z)))
-        out = self.layer1(out)
+        out = self.layer1(z)
         out = self.layer2(out)
         out = self.layer3(out)
         out = out.flatten(1, 2)
-        out = torch.cat([x, x, out], dim=-1)
+        out = torch.cat([x, x, x, x, out], dim=-1)
         out = F.leaky_relu_(self.linear1(out))
         out = F.leaky_relu_(self.linear2(out))
         out = F.leaky_relu_(self.linear3(out))
-        out = F.leaky_relu_(self.linear4(out))
-        out = F.leaky_relu_(self.linear5(out))
+        out = self.linear4(out)
+
         if return_value:
             return dict(values=out)
         else:
             if flags is not None and flags.exp_epsilon > 0 and np.random.rand() < flags.exp_epsilon:
                 action = torch.randint(out.shape[0], (1,))[0]
             else:
-                action = torch.argmax(out,dim=0)[0]
+                action = torch.argmax(out, dim=0)[0]
             return dict(action=action, max_value=torch.max(out), values=out)
 
 
 class GeneralModelBid(nn.Module):
-    def __init__(self):
+    def __init__(self, position=None):
         super().__init__()
-        self.in_planes = 12
+        self.in_planes = 5
         # input 1*54*22
-        self.conv1 = nn.Conv1d(6, 12, kernel_size=(3,),
-                               stride=(2,), padding=1, bias=False)  # 1*27*12
-
-        self.bn1 = nn.BatchNorm1d(12)
-
-        self.layer1 = self._make_layer(Bottleneck, 12, 2, stride=2)  # 1*14*12
-        self.layer2 = self._make_layer(Bottleneck, 24, 2, stride=2)  # 1*7*24
-        self.layer3 = self._make_layer(Bottleneck, 48, 2, stride=2)  # 1*4*48
-        self.linear1 = nn.Linear(48 * Bottleneck.expansion * 4, 512)
-        self.linear2 = nn.Linear(512, 512)
-        self.linear3 = nn.Linear(512, 512)
-        self.linear4 = nn.Linear(512, 256)
-        self.linear5 = nn.Linear(256, 1)
+        self.layer1 = self._make_layer(BasicBlock, 5, 3, stride=2)  # 1*14*12
+        self.layer2 = self._make_layer(BasicBlock, 10, 3, stride=2)  # 1*7*24
+        self.layer3 = self._make_layer(BasicBlock, 20, 3, stride=2)  # 1*4*48
+        self.linear1 = nn.Linear(20 * BasicBlock.expansion * 7, 256)
+        self.linear2 = nn.Linear(256, 256)
+        self.linear3 = nn.Linear(256, 128)
+        self.linear4 = nn.Linear(128, 1)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -151,23 +161,21 @@ class GeneralModelBid(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, z, x, return_value=False, flags=None, debug=False):
-        out = F.relu(self.bn1(self.conv1(z)))
-        out = self.layer1(out)
+        out = self.layer1(z)
         out = self.layer2(out)
         out = self.layer3(out)
         out = out.flatten(1, 2)
         out = F.leaky_relu_(self.linear1(out))
         out = F.leaky_relu_(self.linear2(out))
         out = F.leaky_relu_(self.linear3(out))
-        out = F.leaky_relu_(self.linear4(out))
-        out = F.leaky_relu_(self.linear5(out))
+        out = self.linear4(out)
         if return_value:
             return dict(values=out)
         else:
-            if flags is not None and flags.exp_epsilon > 0 and np.random.rand() < flags.exp_epsilon:
+            if flags is not None and flags.exp_epsilon > 0 and np.random.rand() < flags.bid_exp_epsilon:
                 action = torch.randint(out.shape[0], (1,))[0]
             else:
-                action = torch.argmax(out,dim=0)[0]
+                action = torch.argmax(out, dim=0)[0]
             return dict(action=action, max_value=torch.max(out), values=out)
 
 
@@ -230,8 +238,6 @@ class Model:
 
     def get_models(self):
         return self.models
-
-
 
 
 class LandlordLstmModel(nn.Module):

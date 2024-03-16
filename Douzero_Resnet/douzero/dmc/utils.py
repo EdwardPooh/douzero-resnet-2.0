@@ -12,6 +12,7 @@ from torch import multiprocessing as mp
 from torch.distributions import Categorical
 from .env_utils import Environment
 from douzero.env import Env
+from douzero.dmc.ranger import Ranger
 
 Card2Column = {3: 0, 4: 1, 5: 2, 6: 3, 7: 4, 8: 5, 9: 6, 10: 7,
                11: 8, 12: 9, 13: 10, 14: 11, 17: 12}
@@ -36,15 +37,12 @@ log.setLevel(logging.INFO)
 # and learner processes. They are shared tensors in GPU
 Buffers = typing.Dict[str, typing.List[torch.Tensor]]
 
+
 def create_env(flags):
     return Env(flags.objective)
 
+
 def get_batch(b_queues, position, flags, lock):
-    """
-    This function will sample a batch from the buffers based
-    on the indices received from the full queue. It will also
-    free the indices by sending it to full_queue.
-    """
     b_queue = b_queues
     buffer = []
     while len(buffer) < flags.batch_size:
@@ -56,14 +54,12 @@ def get_batch(b_queues, position, flags, lock):
     del buffer
     return batch
 
+
 def create_optimizers(flags, learner_model):
-    """
-    Create three optimizers for the three positions
-    """
     positions = ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']
     optimizers = {}
     for position in positions:
-        optimizer = RAdam(
+        optimizer = Ranger(
             learner_model.parameters(position),
             lr=flags.learning_rate,
             eps=flags.epsilon)
@@ -74,7 +70,7 @@ def create_optimizers(flags, learner_model):
 def act(i, device, batch_queues, model, flags):
     positions = ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']
     # for pos in positions:
-        # model.get_model(pos).to(torch.device(device if device == "cpu" else ("cuda:"+str(device))))
+    #     model.get_model(pos).to(torch.device(device if device == "cpu" else ("cuda:"+str(device))))
     try:
         T = flags.unroll_length
         log.info('Device %s Actor %i started.', str(device), i)
@@ -92,45 +88,47 @@ def act(i, device, batch_queues, model, flags):
         position, obs, env_output = env.initial(model, device, flags=flags)
 
         while True:
-            bid_count = 0
             while True:
-                with torch.no_grad():
-                    agent_output = model.forward(position, obs['z_batch'], obs['x_batch'], flags=flags)
-                if len(agent_output['values']) > 1:
-                    v = agent_output['values'].T.to(device)
-                    mean = v.mean()
-                    std = v.std()
-                    v = (v - mean) / (std + 1e-8)
-                    probs = torch.softmax((v - v.max()) / flags.temperature, dim=1)
-                    dist_now = Categorical(probs=probs)
-                    _action_idx = int(dist_now.sample().cpu().detach().numpy())
+
+                if len(obs['legal_actions']) > 1:
+                    with torch.no_grad():
+                        agent_output = model.forward(position, obs['z_batch'], obs['x_batch'], flags=flags)
+                    _action_idx = int(agent_output['action'].cpu().detach().numpy())
                     action = obs['legal_actions'][_action_idx]
-                    if len(action) == 1 and (action[0] == 0 or action[0] == 1) and random.random() > flags.bid_exp_epsilon:
-                        action[0] ^= 1
-                    if len(action) == 1 and (action[0] == 0 or action[0] == 1):
-                        obs_z_buf[position].append(torch.vstack((torch.full((1, 54), action[0]), env_output['obs_z'])).float())
+
+                    if position in ['first', 'second', 'third']:
+                        obs_z_buf[position].append(
+                            torch.vstack((torch.full((1, 54), action[0]), env_output['obs_z'])).float())
                     else:
                         obs_z_buf[position].append(
                             torch.vstack((_cards2tensor(action).unsqueeze(0), env_output['obs_z'])).float())
                 else:
-                    _action_idx = 0
                     action = obs['legal_actions'][0]
-                    obs_z_buf[position].append(
-                        torch.vstack((_cards2tensor(action).unsqueeze(0), env_output['obs_z'])).float())
+                    if position in ['first', 'second', 'third']:
+                        obs_z_buf[position].append(
+                            torch.vstack((torch.full((1, 54), action[0]), env_output['obs_z'])).float())
+                    else:
+                        obs_z_buf[position].append(
+                            torch.vstack((_cards2tensor(action).unsqueeze(0), env_output['obs_z'])).float())
+
                 x_batch = env_output['obs_x_no_action'].float()
                 obs_x_batch_buf[position].append(x_batch)
-                position, obs, env_output = env.step(action, model, device, flags=flags)
                 size[position] += 1
-                if env_output['done']:
+                position, obs, env_output = env.step(action, model, device, flags=flags)
+
+                if env_output['done'] or env_output['draw']:
                     for p in positions:
                         diff = size[p] - len(target_buf[p])
                         if diff > 0:
                             done_buf[p].extend([False for _ in range(diff - 1)])
                             done_buf[p].append(True)
-                            episode_return = env_output['episode_return']["play"][p]
+                            if env_output['draw']:
+                                episode_return = 0.
+                            else:
+                                episode_return = env_output['episode_return']["play"][p]
                             episode_return_buf[p].extend([0.0 for _ in range(diff - 1)])
                             episode_return_buf[p].append(episode_return)
-                            target_buf[p].extend([episode_return for _ in range(diff)])
+                            target_buf[p].extend([episode_return * flags.decay ** (diff - n) for n in range(diff)])
                     break
             for p in positions:
                 if size[p] > T:
@@ -157,6 +155,7 @@ def act(i, device, batch_queues, model, flags):
         traceback.print_exc()
         print()
         raise e
+
 
 def _cards2tensor(list_cards):
     """

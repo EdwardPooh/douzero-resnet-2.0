@@ -3,7 +3,8 @@ import multiprocessing as mp
 import os.path
 import pickle
 import copy
-from game_eval import GameEnv
+from game_eval_JJ import GameEnv
+# from douzero.env.game import GameEnv
 
 EnvCard2RealCard = {3: '3', 4: '4', 5: '5', 6: '6', 7: '7',
                     8: '8', 9: '9', 10: 'T', 11: 'J', 12: 'Q',
@@ -33,6 +34,9 @@ def load_card_play_models(card_play_model_path_dict):
         if card_play_model_path_dict[position] == 'random':
             from .random_agent import RandomAgent
             players[position] = RandomAgent()
+        elif card_play_model_path_dict[position] == 'Supervised':
+            from .deep_agent import SupervisedModel
+            players[position] = SupervisedModel()
         elif card_play_model_path_dict[position] == 'rlcard':
             from .rlcard_agent import RLCardAgent
             players[position] = RLCardAgent(position)
@@ -45,8 +49,8 @@ def load_card_play_models(card_play_model_path_dict):
                 if "landlord" in paths[0]:
                     players[position] = {
                         "landlord": DeepAgent("landlord", paths[0]),
-                        "landlord_down": DeepAgent("landlord", paths[1]),
-                        "landlord_up": DeepAgent("landlord", paths[2]),
+                        "landlord_down": DeepAgent("landlord_down", paths[1]),
+                        "landlord_up": DeepAgent("landlord_up", paths[2]),
                     }
                 elif "first" in paths[0]:
                     players[position] = {
@@ -109,7 +113,14 @@ def mp_simulate(card_play_data_list, card_play_model_path_dict, q):
         while not env.bid_over:
             action, action_list = env.step()
             if enable_output:
-                print("叫" if action[0] == 1 else "不叫", format_action_list(action_list))
+                if action[0] == 1:
+                    print('叫1分', format_action_list(action_list))
+                elif action[0] == 2:
+                    print('叫2分', format_action_list(action_list))
+                elif action[0] == 3:
+                    print('叫3分', format_action_list(action_list))
+                else:
+                    print("不叫", format_action_list(action_list))
         step_index = 0
         if not env.draw:
             bid_count[env.bid_count-1] += 1
@@ -157,8 +168,15 @@ def mp_simulate(card_play_data_list, card_play_model_path_dict, q):
 
            Env.num_scores['third'],
 
-           bid_count
+           bid_count,
+
+           Env.num_landlord['first'],
+
+           Env.num_landlord['second'],
+
+           Env.num_landlord['third'],
          ))
+
 
 def data_allocation_per_worker(card_play_data_list, num_workers):
     card_play_data_list_each_worker = [[] for k in range(num_workers)]
@@ -166,6 +184,7 @@ def data_allocation_per_worker(card_play_data_list, num_workers):
         card_play_data_list_each_worker[idx % num_workers].append(data)
 
     return card_play_data_list_each_worker
+
 
 def evaluate(first, second, third, playcard_1, playcard_2, playcard_3, eval_data, num_workers):
 
@@ -204,6 +223,10 @@ def evaluate(first, second, third, playcard_1, playcard_2, playcard_3, eval_data
     num_first_scores = 0
     num_second_scores = 0
     num_third_scores = 0
+    num_first_landlord = 0
+    num_second_landlord = 0
+    num_third_landlord = 0
+
 
     ctx = mp.get_context('spawn')
     q = ctx.SimpleQueue()
@@ -231,9 +254,16 @@ def evaluate(first, second, third, playcard_1, playcard_2, playcard_3, eval_data
         num_first_scores += result[8]
         num_second_scores += result[9]
         num_third_scores += result[10]
+        num_first_landlord += result[12]
+        num_second_landlord += result[13]
+        num_third_landlord += result[14]
 
     num_total_wins = num_landlord_wins + num_farmer_wins
     print("\n对局模型信息：")
+    print("landlord distribution:")
+    print('First : Second : Third - {} : {} : {}'.format(num_first_landlord / num_total_wins,
+                                                         num_second_landlord / num_total_wins,
+                                                         num_third_landlord / num_total_wins))
     print('WP results:')
     print('First : Second : Third - {} : {} : {}'.format(num_first_wins / num_total_wins,
                                                          num_second_wins / num_total_wins,

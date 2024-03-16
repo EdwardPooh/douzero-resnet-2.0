@@ -14,9 +14,10 @@ import douzero.dmc.models
 import douzero.env.env
 from .file_writer import FileWriter
 from .models import Model
+
 from .utils import get_batch, log, create_env, create_optimizers, act
 
-mean_episode_return_buf = {p:deque(maxlen=100) for p in ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']}
+mean_episode_return_buf = {p:deque(maxlen=10) for p in ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']}
 
 
 def compute_loss(logits, targets):
@@ -53,6 +54,7 @@ def learn(position, actor_models, model, batch, optimizer, flags, lock):
         for actor_model in actor_models.values():
             actor_model.get_model(position).load_state_dict(model.state_dict())
         return stats
+
 
 def train(flags):  
     """
@@ -93,8 +95,11 @@ def train(flags):
     # Initialize queues
     actor_processes = []
     ctx = mp.get_context('spawn')
-    batch_queues = {"first": ctx.SimpleQueue(), "second": ctx.SimpleQueue(), "third": ctx.SimpleQueue(),
-        "landlord": ctx.SimpleQueue(), "landlord_up": ctx.SimpleQueue(), "landlord_down": ctx.SimpleQueue()}
+    batch_queues = {}
+    for device in device_iterator:
+        batch_queue = {"first": ctx.SimpleQueue(), "second": ctx.SimpleQueue(), "third": ctx.SimpleQueue(),
+            "landlord": ctx.SimpleQueue(), "landlord_up": ctx.SimpleQueue(), "landlord_down": ctx.SimpleQueue()}
+        batch_queues[device] = batch_queue
 
     # Learner model for training
     learner_model = Model(device=flags.training_device)
@@ -125,9 +130,11 @@ def train(flags):
         checkpoint_states = torch.load(
             checkpointpath, map_location=("cuda:"+str(flags.training_device) if flags.training_device != "cpu" else "cpu")
         )
+
         for k in ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']:
             learner_model.get_model(k).load_state_dict(checkpoint_states["model_state_dict"][k])
             optimizers[k].load_state_dict(checkpoint_states["optimizer_state_dict"][k])
+            optimizers[k].param_groups[0]['lr'] = flags.learning_rate
             for device in device_iterator:
                 models[device].get_model(k).load_state_dict(checkpoint_states["model_state_dict"][k])
         stats = checkpoint_states["stats"]
@@ -141,8 +148,7 @@ def train(flags):
         for i in range(flags.num_actors):
             actor = ctx.Process(
                 target=act,
-                args=(i, device, batch_queues, models[device], flags))
-            # actor.setDaemon(True)
+                args=(i, device, batch_queues[device], models[device], flags))
             actor.start()
             actor_processes.append(actor)
 
@@ -150,7 +156,7 @@ def train(flags):
         """Thread target for the learning process."""
         nonlocal frames, position_frames, stats
         while frames < flags.total_frames:
-            batch = get_batch(batch_queues[position], position, flags, local_lock)
+            batch = get_batch(batch_queues[device][position], position, flags, local_lock)
             _stats = learn(position, models, learner_model.get_model(position), batch, 
                 optimizers[position], flags, position_lock)
             with lock:
@@ -185,8 +191,8 @@ def train(flags):
         log.info('Saving checkpoint to %s', checkpointpath)
         _models = learner_model.get_models()
         torch.save({
-            'model_state_dict': {k: _models[k].state_dict() for k in _models},  # {{"general": _models["landlord"].state_dict()}
-            'optimizer_state_dict': {k: optimizers[k].state_dict() for k in optimizers},  # {"general": optimizers["landlord"].state_dict()}
+            'model_state_dict': {k: _models[k].state_dict() for k in _models},
+            'optimizer_state_dict': {k: optimizers[k].state_dict() for k in optimizers},
             "stats": stats,
             'flags': vars(flags),
             'frames': frames,
@@ -196,7 +202,7 @@ def train(flags):
         # Save the weights for evaluation purpose
         for position in ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']:
             model_weights_dir = os.path.expandvars(os.path.expanduser(
-                '%s/%s/%s' % (flags.savedir, flags.xpid, "general_"+position+'_'+str(frames)+'.ckpt')))
+                '%s/%s/%s' % (flags.savedir, flags.xpid, position+'_'+str(frames)+'.ckpt')))
             torch.save(learner_model.get_model(position).state_dict(), model_weights_dir)
 
     fps_log = []
