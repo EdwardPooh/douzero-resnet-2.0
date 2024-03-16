@@ -7,8 +7,8 @@ parser.add_argument('--xpid', default='douzero',
                     help='Experiment id (default: douzero)')
 parser.add_argument('--save_interval', default=10, type=int,
                     help='Time interval (in minutes) at which to save the model')    
-parser.add_argument('--objective', default='adp', type=str, choices=['adp', 'wp', 'logadp'],
-                    help='Use ADP or WP as reward (default: ADP)')    
+parser.add_argument('--objective', default='adp', type=str, choices=['adp'],
+                    help='Use ADP as reward (default: ADP)')
 
 # Training settings
 parser.add_argument('--actor_device_cpu', action='store_true',
@@ -51,7 +51,7 @@ parser.add_argument('--max_grad_norm', default=40., type=float,
                     help='Max norm of gradients')
 
 # Optimizer settings
-parser.add_argument('--learning_rate', default=0.0003, type=float,
+parser.add_argument('--learning_rate', default=0.001, type=float,
                     help='Learning rate')
 parser.add_argument('--alpha', default=0.99, type=float,
                     help='RMSProp smoothing constant')
