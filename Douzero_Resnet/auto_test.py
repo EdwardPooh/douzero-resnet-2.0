@@ -101,14 +101,12 @@ def main(checkpoint_dir, output_csv, output_all_csv, best_txt, dire, position):
         
         # 更新eval_out.csv
         df = pd.read_csv(output_csv)
-        # df.loc[len(df)] = new_row
         df = pd.concat([df, new_row], ignore_index=True)
         df = df.tail(max_rows)
         df.to_csv(output_csv, index=False)
         
         # 更新eval_out_all.csv
         df_all = pd.read_csv(output_all_csv)
-        # df_all.loc[len(df_all)] = new_row
         df = pd.concat([df, new_row], ignore_index=True)
         df_all.to_csv(output_all_csv, index=False)
         

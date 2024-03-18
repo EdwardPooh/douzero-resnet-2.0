@@ -75,17 +75,13 @@ class SupervisedModel:
             self.gpu = True
         else:
             self.gpu = False
-        # print(self.gpu)
         if self.gpu:
             self.net = self.net.cuda()
         if os.path.exists("baseline/SLModel/bid_weights_new.pkl"):
-            # print(True)
             if torch.cuda.is_available():
                 self.net.load_state_dict(torch.load('baseline/SLModel/bid_weights_new.pkl'))
-                # print('model_load')
             else:
                 self.net.load_state_dict(torch.load('baseline/SLModel/bid_weights_new.pkl', map_location=torch.device("cpu")))
-                # print('model_load_cpu')
 
     def RealToOnehot(self, cards):
         Onehot = torch.zeros((4, 15))
@@ -104,13 +100,9 @@ class SupervisedModel:
 
     def act(self, infoset):
         obs = torch.flatten(self.RealToOnehot(infoset.player_hand_cards))
-        # print(self.predict_score("333444569TTJJQKK2"))
-        # print(infoset.player_hand_cards)
-        # print(self.RealToOnehot(infoset.player_hand_cards))
         if self.gpu:
             obs = obs.cuda()
         predict = self.net.forward(obs.unsqueeze(0))
-        # print(predict)
         jiao = 0.
         qiang = 0.1
         qiang_2 = 0.1
