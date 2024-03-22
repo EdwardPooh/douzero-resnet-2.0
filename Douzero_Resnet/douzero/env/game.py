@@ -118,6 +118,13 @@ class GameEnv(object):
     def bid_done(self):
         if self.bid_count == 3:
             self.bid_over = True
+            max_index = self.bid_info.index(max(self.bid_info))
+            if max_index == 0:
+                self.position = ['landlord', 'landlord_down', 'landlord_up']
+            elif max_index == 1:
+                self.position = ['landlord_up', 'landlord', 'landlord_down']
+            elif max_index == 2:
+                self.position = ['landlord_down', 'landlord_up', 'landlord']
         elif self.bid_step_count == 3:
             self.bid_over = True
             if self.bid_info == [0, 0, 0]:
