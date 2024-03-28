@@ -36,6 +36,9 @@ def load_card_play_models(card_play_model_path_dict):
         elif card_play_model_path_dict[position] == 'rlcard':
             from .rlcard_agent import RLCardAgent
             players[position] = RLCardAgent(position)
+        elif card_play_model_path_dict[position] == 'Supervised':
+            from .deep_agent import SupervisedModel
+            players[position] = SupervisedModel()
         else:
             from .deep_agent import DeepAgent
             if not isinstance(card_play_model_path_dict[position], list):

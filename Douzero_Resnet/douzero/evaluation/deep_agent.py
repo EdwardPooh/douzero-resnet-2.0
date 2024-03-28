@@ -99,60 +99,22 @@ class SupervisedModel:
         return result[0].item()
 
     def act(self, infoset):
+        legal_action = infoset.legal_actions
         obs = torch.flatten(self.RealToOnehot(infoset.player_hand_cards))
         if self.gpu:
             obs = obs.cuda()
         predict = self.net.forward(obs.unsqueeze(0))
-        jiao = 0.
-        qiang = 0.1
-        qiang_2 = 0.1
-        qiang_3 = 0.1
-        if infoset.player_position == 'first':
-            if 1 in infoset.bid_info:
-                if predict > qiang_3:
-                    return [1]
-                else:
-                    return [0]
-            else:
-                if predict > jiao:
-                    return [1]
-                else:
-                    return [0]
-
-        elif infoset.player_position == 'second':
-            if infoset.bid_info.count(1) == 1:
-                if predict > qiang:
-                    return [1]
-                else:
-                    return [0]
-            elif infoset.bid_info.count(1) == 2:
-                if predict > qiang_2:
-                    return [1]
-                else:
-                    return [0]
-            else:
-                if predict > jiao:
-                    return [1]
-                else:
-                    return [0]
-        elif infoset.player_position == 'third':
-            if infoset.bid_info.count(1) == 2:
-                if predict > qiang_2:
-                    return [1]
-                else:
-                    return [0]
-            elif infoset.bid_info.count(1) == 1:
-                if predict > qiang:
-                    return [1]
-                else:
-                    return [0]
-            else:
-                if predict > jiao:
-                    return [1]
-                else:
-                    return [0]
-        # return None
-        # return best_action
+        one = -0.1
+        two = 0
+        three = 0.1
+        if predict > three and ([3] in legal_action):
+            return [3]
+        elif predict > two and ([2] in legal_action):
+            return [2]
+        elif predict > one and ([1] in legal_action):
+            return [1]
+        else:
+            return [0]
 
 def RealToOnehot(cards):
     RealCard2EnvCard = {'3': 0, '4': 1, '5': 2, '6': 3, '7': 4,
