@@ -6,6 +6,7 @@ from douzero.env.env_douzero import get_obs_douzero
 from douzero.env.env_res import _get_obs_resnet
 from baseline.SLModel.BidModel import Net2 as Net
 
+
 def _load_model(position, model_path, model_type):
     from douzero.dmc.models import model_dict, model_dict_douzero
     if model_type == "test":

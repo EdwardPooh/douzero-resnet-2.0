@@ -12,7 +12,7 @@ from torch import multiprocessing as mp
 from torch.distributions import Categorical
 from .env_utils import Environment
 from douzero.env import Env
-from douzero.dmc.ranger import Ranger
+from douzero.dmc.adamw import AdamW
 
 Card2Column = {3: 0, 4: 1, 5: 2, 6: 3, 7: 4, 8: 5, 9: 6, 10: 7,
                11: 8, 12: 9, 13: 10, 14: 11, 17: 12}
@@ -49,7 +49,7 @@ def get_batch(b_queues, position, flags, lock):
         buffer.append(b_queue.get())
     batch = {
         key: torch.stack([m[key] for m in buffer], dim=1)
-        for key in ["done", "episode_return", "target", "obs_z", "obs_x_batch"]
+        for key in ["done", "episode_return", "target_adp", "target_wp", "obs_z", "obs_x_batch"]
     }
     del buffer
     return batch
@@ -59,7 +59,7 @@ def create_optimizers(flags, learner_model):
     positions = ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']
     optimizers = {}
     for position in positions:
-        optimizer = Ranger(
+        optimizer = RAdam(
             learner_model.parameters(position),
             lr=flags.learning_rate,
             eps=flags.epsilon)
@@ -69,8 +69,6 @@ def create_optimizers(flags, learner_model):
 
 def act(i, device, batch_queues, model, flags):
     positions = ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']
-    # for pos in positions:
-    #     model.get_model(pos).to(torch.device(device if device == "cpu" else ("cuda:"+str(device))))
     try:
         T = flags.unroll_length
         log.info('Device %s Actor %i started.', str(device), i)
@@ -80,7 +78,8 @@ def act(i, device, batch_queues, model, flags):
 
         done_buf = {p: [] for p in positions}
         episode_return_buf = {p: [] for p in positions}
-        target_buf = {p: [] for p in positions}
+        target_adp_buf = {p: [] for p in positions}
+        target_wp_buf = {p: [] for p in positions}
         obs_z_buf = {p: [] for p in positions}
         size = {p: 0 for p in positions}
         obs_x_batch_buf = {p: [] for p in positions}
@@ -118,17 +117,20 @@ def act(i, device, batch_queues, model, flags):
 
                 if env_output['done'] or env_output['draw']:
                     for p in positions:
-                        diff = size[p] - len(target_buf[p])
+                        diff = size[p] - len(target_adp_buf[p])
                         if diff > 0:
                             done_buf[p].extend([False for _ in range(diff - 1)])
                             done_buf[p].append(True)
                             if env_output['draw']:
                                 episode_return = 0.
+                                wp_return = 0.
                             else:
                                 episode_return = env_output['episode_return']["play"][p]
+                                wp_return = 1. if episode_return > 0. else -1.
                             episode_return_buf[p].extend([0.0 for _ in range(diff - 1)])
                             episode_return_buf[p].append(episode_return)
-                            target_buf[p].extend([episode_return * flags.decay ** (diff - n) for n in range(diff)])
+                            target_adp_buf[p].extend([episode_return * flags.decay ** (diff - n) for n in range(diff)])
+                            target_wp_buf[p].extend([wp_return * flags.decay ** (diff - n) for n in range(diff)])
                     break
             for p in positions:
                 if size[p] > T:
@@ -136,14 +138,18 @@ def act(i, device, batch_queues, model, flags):
                         "done": torch.stack([torch.tensor(ndarr, device="cpu") for ndarr in done_buf[p][:T]]),
                         "episode_return": torch.stack(
                             [torch.tensor(ndarr, device="cpu") for ndarr in episode_return_buf[p][:T]]),
-                        "target": torch.stack([torch.tensor(ndarr, device="cpu") for ndarr in target_buf[p][:T]]),
+                        "target_adp": torch.stack(
+                            [torch.tensor(ndarr, device="cpu") for ndarr in target_adp_buf[p][:T]]),
+                        "target_wp": torch.stack(
+                            [torch.tensor(ndarr, device="cpu") for ndarr in target_wp_buf[p][:T]]),
                         "obs_z": torch.stack([ndarr.clone().detach() for ndarr in obs_z_buf[p][:T]]),
                         "obs_x_batch": torch.stack(
                             [ndarr.clone().detach() for ndarr in obs_x_batch_buf[p][:T]]),
                     })
                     done_buf[p] = done_buf[p][T:]
                     episode_return_buf[p] = episode_return_buf[p][T:]
-                    target_buf[p] = target_buf[p][T:]
+                    target_adp_buf[p] = target_adp_buf[p][T:]
+                    target_wp_buf[p] = target_wp_buf[p][T:]
                     obs_x_batch_buf[p] = obs_x_batch_buf[p][T:]
                     obs_z_buf[p] = obs_z_buf[p][T:]
                     size[p] -= T
