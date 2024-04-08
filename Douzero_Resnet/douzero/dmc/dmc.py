@@ -26,6 +26,11 @@ def compute_loss(logits, targets):
     return loss
 
 
+def compute_loss_(logits, targets):
+    loss = ((logits.squeeze(-1) - targets) ** 2)
+    return loss
+
+
 def learn(position, actor_models, model, batch, optimizer, flags, lock):
     """Performs a learning (optimization) step."""
     print("Learn", position)
@@ -44,8 +49,8 @@ def learn(position, actor_models, model, batch, optimizer, flags, lock):
     with lock:
         win_rate, win, lose = model.forward(obs_z, obs_x, return_value=True)['values']
         loss1 = compute_loss(win_rate, target_wp)
-        l_w = compute_loss(win, target_adp) * (1. + target_wp) / 2.
-        l_l = compute_loss(lose, target_adp) * (1. - target_wp) / 2.
+        l_w = compute_loss_(win, target_adp) * (1. + target_wp) / 2.
+        l_l = compute_loss_(lose, target_adp) * (1. - target_wp) / 2.
         loss2 = l_w.mean() + l_l.mean()
         loss = loss1 + loss2
 
