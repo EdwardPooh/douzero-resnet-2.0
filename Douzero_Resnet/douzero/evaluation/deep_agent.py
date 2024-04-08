@@ -24,7 +24,6 @@ def _load_model(position, model_path, model_type):
     pretrained = {k: v for k, v in pretrained.items() if k in model_state_dict}
     model_state_dict.update(pretrained)
     model.load_state_dict(model_state_dict)
-    # torch.save(model.state_dict(), model_path.replace(".ckpt", "_nobn.ckpt"))
     if torch.cuda.is_available():
         model.cuda()
     model.eval()
@@ -56,14 +55,16 @@ class DeepAgent:
         x_batch = torch.from_numpy(obs['x_batch']).float()
         if torch.cuda.is_available():
             z_batch, x_batch = z_batch.cuda(), x_batch.cuda()
-        y_pred = self.model.forward(z_batch, x_batch, return_value=True)['values']
+        if self.model_type != 'new':
+            y_pred = self.model.forward(z_batch, x_batch, return_value=True)['values']
+        else:
+            win_rate, win, lose = self.model.forward(z_batch, x_batch, return_value=True)['values']
+            _win_rate = (win_rate + 1) / 2
+            y_pred = _win_rate * win + (1. - _win_rate) * lose
         y_pred = y_pred.detach().cpu().numpy()
 
         best_action_index = np.argmax(y_pred, axis=0)[0]
         best_action = infoset.legal_actions[best_action_index]
-        if obs["position"] == "landlord":
-            ccc = 1
-        # print(y_pred)
         return best_action
 
 
