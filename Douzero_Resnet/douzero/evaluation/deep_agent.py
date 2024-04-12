@@ -5,6 +5,8 @@ from douzero.env.env import get_obs
 from douzero.env.env_douzero import get_obs_douzero
 from douzero.env.env_res import _get_obs_resnet
 from baseline.SLModel.BidModel import Net2 as Net
+from collections import Counter
+
 
 
 def _load_model(position, model_path, model_type):
@@ -42,6 +44,17 @@ class DeepAgent:
         self.EnvCard2RealCard = {3: '3', 4: '4', 5: '5', 6: '6', 7: '7',
                             8: '8', 9: '9', 10: 'T', 11: 'J', 12: 'Q',
                             13: 'K', 14: 'A', 17: '2', 20: 'X', 30: 'D'}
+
+    def check_no_bombs(self, cards):
+        card_counts = Counter(cards)
+        for count in card_counts.values():
+            if count == 4:
+                return False
+
+        if 20 in card_counts and 30 in card_counts:
+            return False
+
+        return True
 
     def act(self, infoset):
         if self.model_type == "test":

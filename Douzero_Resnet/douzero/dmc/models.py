@@ -166,6 +166,14 @@ class GeneralModelResnet(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
+    def check_no_bombs(self, a):
+        reshaped_a = a[:52].view(-1, 4)
+        sums = reshaped_a.sum(dim=1)
+        if torch.all(sums < 4) and a[52] + a[53] < 2:
+            return True
+        else:
+            return False
+
     def forward(self, z, x, return_value=False, flags=None, debug=False):
 
         out = self.layer1(z)
