@@ -181,7 +181,11 @@ class GeneralModelResnet(nn.Module):
         win_rate, win, lose = torch.split(out, (1, 1, 1), dim=-1)
         win_rate = torch.tanh(win_rate)
         _win_rate = (win_rate + 1) / 2
-        out = _win_rate * win + (1. - _win_rate) * lose
+
+        if self.check_no_bombs(z[0, 2]) and self.check_no_bombs(z[0, 3]) and (0 in z[0, 11]):
+            out = _win_rate
+        else:
+            out = _win_rate * win + (1. - _win_rate) * lose
 
         if return_value:
             return dict(values=(win_rate, win, lose))
