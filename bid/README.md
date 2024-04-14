@@ -1,8 +1,6 @@
 # Douzero_resnet_bid
-the bid models for douzero resnet.
+the bid models for douzero resnet 2.0.
 
-If you need to use a model from this project, please cite this project with the repository address.
+Open source model address:
+https://github.com/RuBP17/Douzero_resnet_bid
 
-# related projects
-
-douzero_resnet: https://github.com/EdwardPooh/douzero-resnet-2.0
