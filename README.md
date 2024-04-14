@@ -3,7 +3,7 @@ Douzero with ResNet and GPU support for Windows
 
 Fixed bugs in the Resnet， 
 
-usu bigger network
+use bigger network
 
 add bidding system
 

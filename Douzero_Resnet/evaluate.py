@@ -22,11 +22,11 @@ if __name__ == '__main__':
 
     bid = 390318600
 
-    parser.add_argument('--player_1_bid', type=str, default='random')
+    parser.add_argument('--player_1_bid', type=str, default='Supervised')
     parser.add_argument('--player_2_bid', type=str, default='random')
     parser.add_argument('--player_3_bid', type=str, default='random')
 
-    parser.add_argument('--player_1_playcard', type=str, default='baseline/best/landlord.ckpt')
+    parser.add_argument('--player_1_playcard', type=str, default='baseline/test/landlord.ckpt')
     parser.add_argument('--player_2_playcard', type=str, default='baseline/best/landlord_down.ckpt')
     parser.add_argument('--player_3_playcard', type=str, default='baseline/best/landlord_up.ckpt')
 
@@ -50,7 +50,6 @@ if __name__ == '__main__':
         args.player_1_playcard = 'random'
         args.player_2_playcard = 'random'
         args.player_3_playcard = 'random'
-
 
     evaluate(args.player_1_bid,
              args.player_2_bid,
