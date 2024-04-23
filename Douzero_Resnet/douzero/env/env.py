@@ -344,7 +344,7 @@ def _get_obs_resnet(infoset):
                   landlord_down_played_cards,  # 54
                   bid_info_z,
                   spring,
-                  _action_seq_list2array(_process_action_seq(infoset.card_play_action_seq, 60))
+                  _action_seq_list2array(_process_action_seq(infoset.card_play_action_seq, 32, False))
                   ))
 
     _z_batch = np.repeat(

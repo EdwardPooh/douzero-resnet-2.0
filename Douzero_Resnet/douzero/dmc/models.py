@@ -2,99 +2,11 @@
 This file includes the torch models. We wrap the three
 models into one class for convenience.
 """
-import json
-
+import math
 import numpy as np
-
 import torch.nn.functional as F
 import torch
 from torch import nn
-
-
-class Block(nn.Module):
-    def __init__(self, dim, layer_scale_init_value=1e-6):
-        super().__init__()
-        self.dwconv = nn.Conv1d(dim, dim, kernel_size=7, padding=3, groups=dim)  # depthwise conv
-        self.norm = LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, 4 * dim)  # pointwise/1x1 convs, implemented with linear layers
-        self.act = nn.GELU()
-        self.pwconv2 = nn.Linear(4 * dim, dim)
-        self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((dim)),
-                                  requires_grad=True) if layer_scale_init_value > 0 else None
-
-    def forward(self, x):
-        x = self.dwconv(x)
-        x = x.permute(0, 2, 1)  # Adjusting for 1D: (N, C, L) -> (N, L, C)
-        x = self.norm(x)
-        x = self.pwconv1(x)
-        x = self.act(x)
-        x = self.pwconv2(x)
-        if self.gamma is not None:
-            x = self.gamma * x
-        x = x.permute(0, 2, 1)  # Adjusting back: (N, L, C) -> (N, C, L)
-        return x
-
-
-class Bottleneck(nn.Module):
-    # 前面1x1和3x3卷积的filter个数相等，最后1x1卷积是其expansion倍
-    expansion = 4
-
-    def __init__(self, in_planes, planes, stride=1):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv1d(in_planes, planes, kernel_size=(1,), bias=False)
-        self.bn1 = nn.BatchNorm1d(planes)
-        self.conv2 = nn.Conv1d(planes, planes, kernel_size=(3,),
-                               stride=(stride,), padding=1, bias=False)
-        self.bn2 = nn.BatchNorm1d(planes)
-        self.conv3 = nn.Conv1d(planes, self.expansion*planes,
-                               kernel_size=(1,), bias=False)
-        self.bn3 = nn.BatchNorm1d(self.expansion*planes)
-
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv1d(in_planes, self.expansion*planes,
-                          kernel_size=(1,), stride=(stride,), bias=False),
-                nn.BatchNorm1d(self.expansion*planes)
-            )
-
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
-        out += self.shortcut(x)
-        out = F.relu(out)
-        return out
-
-
-# 用于ResNet18和34的残差块，用的是2个3x3的卷积
-class BasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, in_planes, planes, stride=1):
-        super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv1d(in_planes, planes, kernel_size=(3,),
-                               stride=(stride,), padding=1, bias=False)
-        self.bn1 = nn.BatchNorm1d(planes)
-        self.conv2 = nn.Conv1d(planes, planes, kernel_size=(3,),
-                               stride=(1,), padding=1, bias=False)
-        self.bn2 = nn.BatchNorm1d(planes)
-        self.shortcut = nn.Sequential()
-        # 经过处理后的x要与x的维度相同(尺寸和深度)
-        # 如果不相同，需要添加卷积+BN来变换为同一维度
-        if stride != 1 or in_planes != self.expansion * planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv1d(in_planes, self.expansion * planes,
-                          kernel_size=(1,), stride=(stride,), bias=False),
-                nn.BatchNorm1d(self.expansion * planes)
-            )
-
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
-        out += self.shortcut(x)
-        out = F.relu(out)
-        return out
 
 
 class ChannelAttention(nn.Module):
@@ -149,11 +61,11 @@ class BasicBlockM(nn.Module):
 class GeneralModelResnet(nn.Module):
     def __init__(self):
         super().__init__()
-        self.in_planes = 72
-        self.layer1 = self._make_layer(BasicBlockM, 72, 3, stride=2)  # 1*27*72
-        self.layer2 = self._make_layer(BasicBlockM, 144, 3, stride=2)  # 1*14*146
-        self.layer3 = self._make_layer(BasicBlockM, 288, 3, stride=2)  # 1*7*292
-        self.linear1 = nn.Linear(288 * BasicBlockM.expansion * 7 + 18 * 4, 2048)
+        self.in_planes = 44
+        self.layer1 = self._make_layer(BasicBlockM, 44, 3, stride=2)  # 1*27*72
+        self.layer2 = self._make_layer(BasicBlockM, 88, 3, stride=2)  # 1*14*146
+        self.layer3 = self._make_layer(BasicBlockM, 176, 3, stride=2)  # 1*7*292
+        self.linear1 = nn.Linear(176 * BasicBlockM.expansion * 7 + 18 * 4, 2048)
         self.linear2 = nn.Linear(2048, 512)
         self.linear3 = nn.Linear(512, 128)
         self.linear4 = nn.Linear(128, 3)
@@ -166,15 +78,7 @@ class GeneralModelResnet(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def check_no_bombs(self, a):
-        reshaped_a = a[:52].view(-1, 4)
-        sums = reshaped_a.sum(dim=1)
-        if torch.all(sums < 4) and a[52] + a[53] < 2:
-            return True
-        else:
-            return False
-
-    def forward(self, z, x, return_value=False, flags=None, debug=False):
+    def forward(self, z, x, return_value=False, flags=None):
 
         out = self.layer1(z)
         out = self.layer2(out)
@@ -189,11 +93,7 @@ class GeneralModelResnet(nn.Module):
         win_rate, win, lose = torch.split(out, (1, 1, 1), dim=-1)
         win_rate = torch.tanh(win_rate)
         _win_rate = (win_rate + 1) / 2
-
-        if self.check_no_bombs(z[0, 2]) and self.check_no_bombs(z[0, 3]) and (0 in z[0, 11]):
-            out = _win_rate
-        else:
-            out = _win_rate * win + (1. - _win_rate) * lose
+        out = _win_rate * win + (1. - _win_rate) * lose
 
         if return_value:
             return dict(values=(win_rate, win, lose))
@@ -206,7 +106,7 @@ class GeneralModelResnet(nn.Module):
 
 
 class GeneralModelBid(nn.Module):
-    def __init__(self, position=None):
+    def __init__(self):
         super().__init__()
         self.in_planes = 5
         # input 1*54*22
@@ -226,7 +126,7 @@ class GeneralModelBid(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, z, x, return_value=False, flags=None, debug=False):
+    def forward(self, z, x, return_value=False, flags=None):
         out = self.layer1(z)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -250,16 +150,97 @@ class GeneralModelBid(nn.Module):
             return dict(action=action, max_value=torch.max(out), values=out)
 
 
-GeneralModel = GeneralModelResnet
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
+        self.pe[:, 0::2] = torch.sin(position * div_term)
+        self.pe[:, 1::2] = torch.cos(position * div_term)
+        self.pe = self.pe.unsqueeze(0)
+
+    def forward(self, x):
+        x = x + self.pe[:, :x.size(1)].to(x.device)
+        return x
+
+
+class GeneralModelTransformer(nn.Module):
+    def __init__(self, d_model=256, nhead=8, num_encoder_layers=6):
+        super(GeneralModelTransformer, self).__init__()
+
+        self.in_planes = 12
+
+        self.layer1 = self._make_layer(BasicBlockM, 12, 3, stride=2)
+        self.layer2 = self._make_layer(BasicBlockM, 24, 3, stride=2)
+        self.layer3 = self._make_layer(BasicBlockM, 48, 3, stride=2)
+
+        self.fc1 = nn.Linear(54, d_model)
+        self.pos_encoder = PositionalEncoding(d_model, max_len=32)
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
+                                                        dim_feedforward=758, batch_first=True)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_encoder_layers)
+        self.conv = nn.Conv1d(60, 4, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm1d(4)
+
+        self.linear1 = nn.Linear(d_model * 4 + 18 * 2 + 48 * BasicBlockM.expansion * 7, 1024)
+        self.linear2 = nn.Linear(1024, 512)
+        self.linear3 = nn.Linear(512, 128)
+        self.linear4 = nn.Linear(128, 3)
+
+        self.mish = nn.Mish(inplace=True)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
+    def forward(self, src1, src2, return_value=False, flags=None):
+        out1 = self.fc1(src1[:, -32:])
+        out1 = self.pos_encoder(out1)
+        out1 = self.transformer_encoder(out1)
+        out1 = self.mish(self.bn1(self.conv(out1)))
+        out1 = out1.flatten(1, 2)
+
+        out = self.layer1(src1[:, :-32])
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = out.flatten(1, 2)
+
+        out = torch.cat([src2, src2, out1, out], dim=-1)
+        out = F.leaky_relu_(self.linear1(out))
+        out = F.leaky_relu_(self.linear2(out))
+        out = F.leaky_relu_(self.linear3(out))
+        out = self.linear4(out)
+
+        win_rate, win, lose = torch.split(out, (1, 1, 1), dim=-1)
+        win_rate = torch.tanh(win_rate)
+        _win_rate = (win_rate + 1) / 2
+        out = _win_rate * win + (1. - _win_rate) * lose
+
+        if return_value:
+            return dict(values=(win_rate, win, lose))
+        else:
+            if flags is not None and flags.exp_epsilon > 0 and np.random.rand() < flags.exp_epsilon:
+                action = torch.randint(out.shape[0], (1,))[0]
+            else:
+                action = torch.argmax(out, dim=0)[0]
+            return dict(action=action, max_value=torch.max(out), values=out)
+
+
+GeneralModel = GeneralModelTransformer
 
 
 model_dict = {
     "first": GeneralModelBid,
     "second": GeneralModelBid,
     'third': GeneralModelBid,
-    "landlord": GeneralModelResnet,
-    "landlord_down": GeneralModelResnet,
-    "landlord_up": GeneralModelResnet,
+    "landlord": GeneralModelTransformer,
+    "landlord_down": GeneralModelTransformer,
+    "landlord_up": GeneralModelTransformer,
 }
 
 
@@ -271,14 +252,14 @@ class Model:
     def __init__(self, device=0):
         if not device == "cpu":
             device = 'cuda:' + str(device)
-        # self.all_in_one_model = GeneralModel().to(torch.device(device))
+
         self.models = {
             'first': GeneralModelBid().to(torch.device(device)),
             'second': GeneralModelBid().to(torch.device(device)),
             'third': GeneralModelBid().to(torch.device(device)),
-            'landlord': GeneralModelResnet().to(torch.device(device)),
-            'landlord_down': GeneralModelResnet().to(torch.device(device)),
-            'landlord_up': GeneralModelResnet().to(torch.device(device)),
+            'landlord': GeneralModelTransformer().to(torch.device(device)),
+            'landlord_down': GeneralModelTransformer().to(torch.device(device)),
+            'landlord_up': GeneralModelTransformer().to(torch.device(device)),
         }
 
     def forward(self, position, z, x, training=False, flags=None, debug=False):
@@ -324,8 +305,8 @@ class LandlordLstmModel(nn.Module):
 
     def forward(self, z, x, return_value=False, flags=None):
         lstm_out, (h_n, _) = self.lstm(z)
-        lstm_out = lstm_out[:,-1,:]
-        x = torch.cat([lstm_out,x], dim=-1)
+        lstm_out = lstm_out[:, -1, :]
+        x = torch.cat([lstm_out, x], dim=-1)
         x = self.dense1(x)
         x = torch.relu(x)
         x = self.dense2(x)
@@ -343,8 +324,9 @@ class LandlordLstmModel(nn.Module):
             if flags is not None and flags.exp_epsilon > 0 and np.random.rand() < flags.exp_epsilon:
                 action = torch.randint(x.shape[0], (1,))[0]
             else:
-                action = torch.argmax(x,dim=0)[0]
+                action = torch.argmax(x, dim=0)[0]
             return dict(action=action)
+
 
 class FarmerLstmModel(nn.Module):
     def __init__(self):
@@ -359,8 +341,8 @@ class FarmerLstmModel(nn.Module):
 
     def forward(self, z, x, return_value=False, flags=None):
         lstm_out, (h_n, _) = self.lstm(z)
-        lstm_out = lstm_out[:,-1,:]
-        x = torch.cat([lstm_out,x], dim=-1)
+        lstm_out = lstm_out[:, -1, :]
+        x = torch.cat([lstm_out, x], dim=-1)
         x = self.dense1(x)
         x = torch.relu(x)
         x = self.dense2(x)
@@ -378,11 +360,11 @@ class FarmerLstmModel(nn.Module):
             if flags is not None and flags.exp_epsilon > 0 and np.random.rand() < flags.exp_epsilon:
                 action = torch.randint(x.shape[0], (1,))[0]
             else:
-                action = torch.argmax(x,dim=0)[0]
+                action = torch.argmax(x, dim=0)[0]
             return dict(action=action)
 
+
 # Model dict is only used in evaluation but not training
-model_dict_douzero = {}
-model_dict_douzero['landlord'] = LandlordLstmModel
-model_dict_douzero['landlord_up'] = FarmerLstmModel
-model_dict_douzero['landlord_down'] = FarmerLstmModel
+model_dict_douzero = {'landlord': LandlordLstmModel, 'landlord_up': FarmerLstmModel, 'landlord_down': FarmerLstmModel}
+
+
