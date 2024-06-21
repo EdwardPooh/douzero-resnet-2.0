@@ -180,7 +180,7 @@ class GeneralModelTransformer(nn.Module):
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead,
                                                         dim_feedforward=758, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_encoder_layers)
-        self.conv = nn.Conv1d(60, 4, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv = nn.Conv1d(32, 4, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm1d(4)
 
         self.linear1 = nn.Linear(d_model * 4 + 18 * 2 + 48 * BasicBlockM.expansion * 7, 1024)
@@ -264,7 +264,7 @@ class Model:
 
     def forward(self, position, z, x, training=False, flags=None, debug=False):
         model = self.models[position]
-        return model.forward(z, x, training, flags, debug)
+        return model.forward(z, x, training, flags)
 
     def share_memory(self):
         self.models['first'].share_memory()

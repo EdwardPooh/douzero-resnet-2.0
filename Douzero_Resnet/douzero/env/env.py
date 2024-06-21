@@ -313,7 +313,7 @@ def _get_obs_resnet(infoset):
     landlord_down_played_cards = _cards2array(
         infoset.played_cards['landlord_down'])
 
-    bid_info_z = np.multiply(bid_info, np.ones((54, 3))).transpose((1, 0)) / 3
+    bid_info_z = np.multiply(bid_info, np.ones((54, 3))).transpose((1, 0))
 
     bomb_num = _get_one_hot_bomb(
         infoset.bomb_num)
