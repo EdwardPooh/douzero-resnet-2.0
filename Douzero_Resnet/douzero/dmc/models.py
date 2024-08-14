@@ -115,7 +115,7 @@ class GeneralModelBid(nn.Module):
         self.linear1 = nn.Linear(20 * BasicBlockM.expansion * 7, 256)
         self.linear2 = nn.Linear(256, 256)
         self.linear3 = nn.Linear(256, 128)
-        self.linear4 = nn.Linear(128, 3)
+        self.linear4 = nn.Linear(128, 5)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
@@ -134,10 +134,9 @@ class GeneralModelBid(nn.Module):
         out = F.leaky_relu_(self.linear2(out))
         out = F.leaky_relu_(self.linear3(out))
         out = self.linear4(out)
-        win_rate, win, lose = torch.split(out, (1, 1, 1), dim=-1)
-        win_rate = torch.tanh(win_rate)
-        _win_rate = (win_rate + 1) / 2
-        out = _win_rate * win + (1. - _win_rate) * lose
+        win_rate, win, lose = torch.split(out, (3, 1, 1), dim=-1)
+        win_rate = torch.softmax(win_rate)
+        out = _win_rate[:, 0] * win + _win_rate[:, 1] * lose
 
         if return_value:
             return dict(values=(win_rate, win, lose))

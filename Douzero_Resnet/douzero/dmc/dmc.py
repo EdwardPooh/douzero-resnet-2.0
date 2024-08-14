@@ -29,6 +29,11 @@ def compute_loss_(logits, targets):
     return loss
 
 
+def compute_loss_bid(logits, targets):
+    loss = ((logits - targets) ** 2).mean()
+    return loss
+
+
 def learn(position, actor_models, model, batch, optimizer, flags, lock):
     """Performs a learning (optimization) step."""
     print("Learn", position)
@@ -46,11 +51,19 @@ def learn(position, actor_models, model, batch, optimizer, flags, lock):
         mean_episode_return_buf[position].append(torch.mean(episode_returns).to(device))
     with lock:
         win_rate, win, lose = model.forward(obs_z, obs_x, return_value=True)['values']
-        loss1 = compute_loss(win_rate, target_wp)
-        l_w = compute_loss_(win, target_adp) * (1. + target_wp) / 2.
-        l_l = compute_loss_(lose, target_adp) * (1. - target_wp) / 2.
-        loss2 = l_w.mean() + l_l.mean()
-        loss = loss1 + loss2
+
+        if position in ["landlord", "landlord_up", "landlord_down"]:
+            loss1 = compute_loss(win_rate, target_wp)
+            l_w = compute_loss_(win, target_adp) * (1. + target_wp) / 2.
+            l_l = compute_loss_(lose, target_adp) * (1. - target_wp) / 2.
+            loss2 = l_w.mean() + l_l.mean()
+            loss = loss1 + loss2
+        else:
+            loss1 = compute_loss_bid(win_rate, target_wp)
+            l_w = compute_loss_(win, target_adp) * torch.abs(target_wp) * (1. + target_wp) / 2.
+            l_l = compute_loss_(lose, target_adp) * torch.abs(target_wp) * (1. - target_wp) / 2.
+            loss2 = l_w.mean() + l_l.mean()
+            loss = loss1 + loss2
 
         stats = {
             'mean_episode_return_' + position: torch.mean(

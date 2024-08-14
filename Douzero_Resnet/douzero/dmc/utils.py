@@ -48,7 +48,8 @@ def get_batch(b_queues, position, flags, lock):
         buffer.append(b_queue.get())
     batch = {
         key: torch.stack([m[key] for m in buffer], dim=1)
-        for key in ["done", "episode_return", "target_adp", "target_wp", "obs_z", "obs_x_batch"]
+        for key in ["done", "episode_return", "target_adp", "target_wp",
+                    "target_wp_bid", "obs_z", "obs_x_batch"]
     }
     del buffer
     return batch
@@ -79,6 +80,7 @@ def act(i, device, batch_queues, model, flags):
         episode_return_buf = {p: [] for p in positions}
         target_adp_buf = {p: [] for p in positions}
         target_wp_buf = {p: [] for p in positions}
+        target_wp_bid_buf = {p: [] for p in positions}
         obs_z_buf = {p: [] for p in positions}
         size = {p: 0 for p in positions}
         obs_x_batch_buf = {p: [] for p in positions}
@@ -123,13 +125,16 @@ def act(i, device, batch_queues, model, flags):
                             if env_output['draw']:
                                 episode_return = 0.
                                 wp_return = 0.
+                                wp_bid = [0, 0, 1]
                             else:
                                 episode_return = env_output['episode_return']["play"][p]
                                 wp_return = 1. if episode_return > 0. else -1.
+                                wp_bid = [1, 0, 0] if episode_return > 0. else [0, 1, 0]
                             episode_return_buf[p].extend([0.0 for _ in range(diff - 1)])
                             episode_return_buf[p].append(episode_return)
-                            target_adp_buf[p].extend([episode_return * flags.decay ** (diff - n) for n in range(diff)])
-                            target_wp_buf[p].extend([wp_return * flags.decay ** (diff - n) for n in range(diff)])
+                            target_adp_buf[p].extend([episode_return for _ in range(diff)])
+                            target_wp_buf[p].extend([wp_return for _ in range(diff)])
+                            target_wp_bid_buf[p].extend([torch.tensor(wp_bid) for _ in range(diff)])
                     break
             for p in positions:
                 if size[p] > T:
@@ -141,6 +146,8 @@ def act(i, device, batch_queues, model, flags):
                             [torch.tensor(ndarr, device="cpu") for ndarr in target_adp_buf[p][:T]]),
                         "target_wp": torch.stack(
                             [torch.tensor(ndarr, device="cpu") for ndarr in target_wp_buf[p][:T]]),
+                        "target_wp_bid": torch.stack(
+                            [ndarr.clone().detach() for ndarr in target_wp_bid_buf[p][:T]]),
                         "obs_z": torch.stack([ndarr.clone().detach() for ndarr in obs_z_buf[p][:T]]),
                         "obs_x_batch": torch.stack(
                             [ndarr.clone().detach() for ndarr in obs_x_batch_buf[p][:T]]),
@@ -149,6 +156,7 @@ def act(i, device, batch_queues, model, flags):
                     episode_return_buf[p] = episode_return_buf[p][T:]
                     target_adp_buf[p] = target_adp_buf[p][T:]
                     target_wp_buf[p] = target_wp_buf[p][T:]
+                    target_wp_bid_buf[p] = target_wp_bid_buf[p][T:]
                     obs_x_batch_buf[p] = obs_x_batch_buf[p][T:]
                     obs_z_buf[p] = obs_z_buf[p][T:]
                     size[p] -= T
