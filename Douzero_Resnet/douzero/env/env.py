@@ -1,7 +1,5 @@
 from collections import Counter
 import numpy as np
-import random
-import torch
 
 from douzero.env.game import GameEnv
 
@@ -278,9 +276,11 @@ def _get_obs_resnet(infoset):
     other_handcards = _cards2array(infoset.other_hand_cards)
 
     spring = np.array([1]) if infoset.spring else np.array([0])
+    # spring = np.array([0])
     spring = np.multiply(spring, np.ones((54, 1))).transpose((1, 0))
 
     bid_info = np.array(infoset.bid_info).flatten()
+
     bid_info_batch = np.repeat(bid_info[np.newaxis, :],
                                num_legal_actions, axis=0)
 
@@ -298,11 +298,6 @@ def _get_obs_resnet(infoset):
 
     landlord_down_num_cards_left = _get_one_hot_array(
         infoset.num_cards_left_dict['landlord_down'], 17)
-
-    other_handcards_left_list = []
-    for pos in ["landlord", "landlord_up", "landlord_up"]:
-        if pos != infoset.player_position:
-            other_handcards_left_list.extend(infoset.all_handcards[pos])
 
     landlord_played_cards = _cards2array(
         infoset.played_cards['landlord'])
@@ -344,7 +339,7 @@ def _get_obs_resnet(infoset):
                   landlord_down_played_cards,  # 54
                   bid_info_z,
                   spring,
-                  _action_seq_list2array(_process_action_seq(infoset.card_play_action_seq, 32, False))
+                  _action_seq_list2array(_process_action_seq(infoset.card_play_action_seq, 60))
                   ))
 
     _z_batch = np.repeat(
@@ -404,6 +399,7 @@ def _get_bid_obs_resnet(infoset):
         'z': z.astype(np.int8),
     }
     return obs
+
 
 def _get_obs_general(infoset, position):
     num_legal_actions = len(infoset.legal_actions)

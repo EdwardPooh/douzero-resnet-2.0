@@ -10,8 +10,6 @@ import torch
 from torch import multiprocessing as mp
 from torch import nn
 
-import douzero.dmc.models
-import douzero.env.env
 from .file_writer import FileWriter
 from .models import Model
 
