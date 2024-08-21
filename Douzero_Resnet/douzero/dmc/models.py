@@ -135,8 +135,8 @@ class GeneralModelBid(nn.Module):
         out = F.leaky_relu_(self.linear3(out))
         out = self.linear4(out)
         win_rate, win, lose = torch.split(out, (3, 1, 1), dim=-1)
-        win_rate = torch.softmax(win_rate)
-        out = _win_rate[:, 0] * win + _win_rate[:, 1] * lose
+        win_rate = torch.softmax(win_rate, dim=-1)
+        out = win_rate[:, 0] * win + win_rate[:, 1] * lose
 
         if return_value:
             return dict(values=(win_rate, win, lose))

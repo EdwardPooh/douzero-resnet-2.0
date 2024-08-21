@@ -1,15 +1,9 @@
-import os
 import typing
 import logging
 import traceback
 import numpy as np
 from collections import Counter
-import time
-from douzero.radam.radam import RAdam
-import random
 import torch
-from torch import multiprocessing as mp
-from torch.distributions import Categorical
 from .env_utils import Environment
 from douzero.env import Env
 
@@ -59,7 +53,7 @@ def create_optimizers(flags, learner_model):
     positions = ['first', 'second', 'third', 'landlord', 'landlord_up', 'landlord_down']
     optimizers = {}
     for position in positions:
-        optimizer = RAdam(
+        optimizer = torch.optim.RAdam(
             learner_model.parameters(position),
             lr=flags.learning_rate,
             eps=flags.epsilon)

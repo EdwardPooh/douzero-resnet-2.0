@@ -59,8 +59,11 @@ class DeepAgent:
             y_pred = self.model.forward(z_batch, x_batch, return_value=True)['values']
         else:
             win_rate, win, lose = self.model.forward(z_batch, x_batch, return_value=True)['values']
-            _win_rate = (win_rate + 1) / 2
-            y_pred = _win_rate * win + (1. - _win_rate) * lose
+            if infoset.player_position in ["landlord", "landlord_up", "landlord_down"]:
+                _win_rate = (win_rate + 1) / 2
+                y_pred = _win_rate * win + (1. - _win_rate) * lose
+            else:
+                y_pred = win_rate[:, 0] * win + win_rate[:, 1] * lose
         y_pred = y_pred.detach().cpu().numpy()
 
         best_action_index = np.argmax(y_pred, axis=0)[0]

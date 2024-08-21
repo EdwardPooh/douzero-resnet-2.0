@@ -46,6 +46,7 @@ def learn(position, actor_models, model, batch, optimizer, flags, lock):
     obs_z = torch.flatten(batch['obs_z'].to(device), 0, 1).float()
     target_adp = torch.flatten(batch['target_adp'].to(device), 0, 1)
     target_wp = torch.flatten(batch['target_wp'].to(device), 0, 1)
+    target_wp_bid = torch.flatten(batch['target_wp_bid'].to(device), 0, 1)
     episode_returns = batch['episode_return'][batch['done']]
     if len(episode_returns) > 0:
         mean_episode_return_buf[position].append(torch.mean(episode_returns).to(device))
@@ -59,7 +60,7 @@ def learn(position, actor_models, model, batch, optimizer, flags, lock):
             loss2 = l_w.mean() + l_l.mean()
             loss = loss1 + loss2
         else:
-            loss1 = compute_loss_bid(win_rate, target_wp)
+            loss1 = compute_loss_bid(win_rate, target_wp_bid)
             l_w = compute_loss_(win, target_adp) * torch.abs(target_wp) * (1. + target_wp) / 2.
             l_l = compute_loss_(lose, target_adp) * torch.abs(target_wp) * (1. - target_wp) / 2.
             loss2 = l_w.mean() + l_l.mean()

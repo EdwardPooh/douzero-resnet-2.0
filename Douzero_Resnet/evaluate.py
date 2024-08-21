@@ -18,17 +18,14 @@ if torch.cuda.is_available():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Dou Dizhu Evaluation')
-    num = 10829373000
-
-    bid = 390318600
 
     parser.add_argument('--player_1_bid', type=str, default='Supervised')
-    parser.add_argument('--player_2_bid', type=str, default='random')
+    parser.add_argument('--player_2_bid', type=str, default='douzero_checkpoints/douzero_II/second_0.ckpt')
     parser.add_argument('--player_3_bid', type=str, default='random')
 
     parser.add_argument('--player_1_playcard', type=str, default='baseline/test/landlord.ckpt')
     parser.add_argument('--player_2_playcard', type=str, default='baseline/best/landlord_down.ckpt')
-    parser.add_argument('--player_3_playcard', type=str, default='baseline/best/landlord_up.ckpt')
+    parser.add_argument('--player_3_playcard', type=str, default='douzero_checkpoints/douzero_II/landlord_up_0.ckpt')
 
     parser.add_argument('--eval_data', type=str, default='eval_data.pkl')
     parser.add_argument('--num_workers', type=int, default=2)
