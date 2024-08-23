@@ -236,9 +236,9 @@ model_dict = {
     "first": GeneralModelBid,
     "second": GeneralModelBid,
     'third': GeneralModelBid,
-    "landlord": GeneralModelTransformer,
-    "landlord_down": GeneralModelTransformer,
-    "landlord_up": GeneralModelTransformer,
+    "landlord": GeneralModelResnet,
+    "landlord_down": GeneralModelResnet,
+    "landlord_up": GeneralModelResnet,
 }
 
 
